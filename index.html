@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 길운 달력 - 사주명가 대운</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&family=Noto+Serif+KR:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Noto Sans KR', 'sans-serif'],
+                        serif: ['Noto Serif KR', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 기본 스타일 - 글씨 크기 확대 */
+        body {
+            font-size: 18px;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .gradient-gold {
+            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+        }
+        
+        .card-shadow {
+            box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+        }
+        
+        /* 길운 색상 - 주의는 붉은 계열 */
+        .luck-great { 
+            background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 100%); 
+            border-left: 4px solid #f59e0b;
+        }
+        .luck-good { 
+            background: linear-gradient(135deg, #dcfce7 0%, #86efac 100%); 
+            border-left: 4px solid #22c55e;
+        }
+        .luck-normal { 
+            background: #f9fafb; 
+            border-left: 4px solid #9ca3af;
+        }
+        .luck-caution { 
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); 
+            border-left: 4px solid #ef4444;
+        }
+        
+        /* 달력 셀 - 크기 확대 */
+        .calendar-cell {
+            min-height: 90px;
+            border: 1px solid #e5e7eb;
+            padding: 6px;
+            font-size: 14px;
+            position: relative;
+            transition: all 0.2s;
+            border-radius: 8px;
+        }
+        .calendar-cell:hover {
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+            z-index: 10;
+            transform: translateY(-2px);
+        }
+        .calendar-cell.empty {
+            background: #f3f4f6;
+            min-height: 90px;
+        }
+        .calendar-cell .day-number {
+            font-weight: 700;
+            font-size: 18px;
+        }
+        .calendar-cell .ganji {
+            font-family: 'Noto Serif KR', serif;
+            font-size: 16px;
+            font-weight: 600;
+            color: #374151;
+            margin-top: 2px;
+        }
+        .calendar-cell .luck-symbol {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            font-size: 16px;
+        }
+        .calendar-cell.sunday .day-number { color: #dc2626; }
+        .calendar-cell.saturday .day-number { color: #2563eb; }
+        
+        /* 일별 이슈 태그 */
+        .issue-tag {
+            font-size: 11px;
+            padding: 2px 4px;
+            border-radius: 4px;
+            white-space: nowrap;
+            line-height: 1.3;
+        }
+        .calendar-cell .issues-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            margin-top: 4px;
+        }
+        
+        /* 사주 기둥 - 크기 확대 */
+        .pillar-box {
+            background: linear-gradient(180deg, #1e1b4b 0%, #312e81 100%);
+            border-radius: 16px;
+            padding: 1.25rem;
+            box-shadow: 0 8px 25px rgba(30, 27, 75, 0.3);
+        }
+        .hanja-large {
+            font-family: 'Noto Serif KR', serif;
+            font-size: 2.5rem;
+            font-weight: 900;
+        }
+        
+        /* 월 색상 테마 */
+        .month-theme-good { 
+            border-top: 5px solid #f59e0b; 
+            background: linear-gradient(180deg, #fffbeb 0%, #ffffff 100%);
+        }
+        .month-theme-normal { 
+            border-top: 5px solid #9ca3af; 
+        }
+        .month-theme-caution { 
+            border-top: 5px solid #ef4444; 
+            background: linear-gradient(180deg, #fef2f2 0%, #ffffff 100%);
+        }
+        
+        /* 프린트/PDF용 */
+        @media print {
+            .no-print { display: none !important; }
+            .calendar-cell { min-height: 70px; }
+        }
+        
+        /* 월별 달력 - 페이지 나눔 방지 */
+        .month-calendar {
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+        
+        /* 로고 스타일 */
+        .logo-circle {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #7c3aed, #4338ca);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.4);
+        }
+        
+        /* 카드 스타일 개선 */
+        .info-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            overflow: hidden;
+        }
+        
+        /* 그라데이션 텍스트 */
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100 font-sans min-h-screen">
+    <!-- 로딩 화면 -->
+    <div id="loading" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
+        <div class="text-center">
+            <div class="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-purple-600 mx-auto mb-6"></div>
+            <p class="text-gray-600 text-xl">길운 달력을 불러오는 중...</p>
+        </div>
+    </div>
+
+    <!-- 토큰 입력 화면 -->
+    <div id="tokenScreen" class="hidden fixed inset-0 gradient-bg flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl card-shadow p-10 max-w-lg w-full text-center">
+            <div class="logo-circle mx-auto mb-8">
+                <div class="text-center text-white">
+                    <p class="text-sm font-medium">사주명가</p>
+                    <p class="text-2xl font-bold leading-tight">대운</p>
+                </div>
+            </div>
+            <h1 class="text-3xl font-bold text-gray-800 mb-3">2026 길운 달력</h1>
+            <p class="text-gray-500 text-lg mb-8">나만의 행운 캘린더에 오신 것을 환영합니다</p>
+            
+            <div class="space-y-5">
+                <input type="text" id="tokenInput" placeholder="생년월일을 입력하세요 (예: 19720101)" 
+                       class="w-full px-6 py-4 border-2 border-gray-200 rounded-2xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 text-center text-xl font-medium transition-all"
+                       maxlength="8" inputmode="numeric"
+                       onkeypress="if(event.key==='Enter') verifyToken()">
+                <button onclick="verifyToken()" 
+                        class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-4 px-8 rounded-2xl transition-all text-xl shadow-lg hover:shadow-xl">
+                    <i class="fas fa-unlock-alt mr-2"></i>내 달력 보기
+                </button>
+            </div>
+            
+            <p id="tokenError" class="text-red-500 mt-6 hidden text-lg">등록되지 않은 생년월일입니다.</p>
+            
+            <div class="mt-10 pt-8 border-t border-gray-200">
+                <p class="text-gray-400 text-base">관리자이신가요?</p>
+                <a href="admin.html" class="text-purple-600 hover:text-purple-700 text-lg font-semibold">
+                    관리자 페이지로 이동 <i class="fas fa-arrow-right ml-1"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 메인 콘텐츠 -->
+    <div id="mainContent" class="hidden">
+        <!-- 헤더 -->
+        <header class="gradient-bg text-white py-8 px-4 no-print">
+            <div class="max-w-7xl mx-auto">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+                    <div class="flex items-center gap-5">
+                        <div class="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center backdrop-blur">
+                            <div class="text-center">
+                                <p class="text-[10px]">사주명가</p>
+                                <p class="text-lg font-bold leading-none">대운</p>
+                            </div>
+                        </div>
+                        <div>
+                            <h1 class="text-3xl md:text-4xl font-bold">2026 길운 달력</h1>
+                            <p id="userGreeting" class="text-purple-200 text-lg mt-1"></p>
+                        </div>
+                    </div>
+                    <div class="mt-6 md:mt-0 flex gap-3">
+                        <button onclick="downloadPDF()" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-xl transition-all text-lg font-medium backdrop-blur">
+                            <i class="fas fa-file-pdf mr-2"></i>PDF 저장
+                        </button>
+                        <button onclick="logout()" class="bg-white/20 hover:bg-white/30 px-6 py-3 rounded-xl transition-all text-lg font-medium backdrop-blur">
+                            <i class="fas fa-sign-out-alt mr-2"></i>로그아웃
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto px-4 py-8" id="pdfContent">
+            <!-- PDF 첫 페이지용 커버 -->
+            <section id="coverSection" class="mb-8">
+                <!-- 사주 정보 요약 -->
+                <div class="info-card p-6 md:p-8">
+                    <div class="flex flex-col lg:flex-row gap-8">
+                        <!-- 사주 기둥 -->
+                        <div class="flex-shrink-0">
+                            <h3 class="text-lg font-bold text-gray-700 mb-4 flex items-center">
+                                <i class="fas fa-yin-yang text-purple-500 mr-2"></i>나의 사주팔자
+                            </h3>
+                            <div class="grid grid-cols-4 gap-3" id="pillarBox">
+                                <!-- JS로 채워짐 -->
+                            </div>
+                        </div>
+                        
+                        <!-- 기본 정보 & 현재 대운 -->
+                        <div class="flex-grow">
+                            <div id="userInfoBox" class="mb-6">
+                                <!-- JS로 채워짐 -->
+                            </div>
+                            <div id="currentDaeunBox">
+                                <!-- JS로 채워짐 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 범례 -->
+            <section class="mb-8 no-print">
+                <div class="info-card p-5">
+                    <div class="flex flex-wrap items-center gap-6 text-base">
+                        <span class="font-bold text-gray-700">길운 표시:</span>
+                        <span class="flex items-center gap-2">
+                            <span class="w-8 h-8 rounded-lg luck-great flex items-center justify-center text-lg font-bold">★</span> 
+                            <span class="font-medium">대길</span>
+                        </span>
+                        <span class="flex items-center gap-2">
+                            <span class="w-8 h-8 rounded-lg luck-good flex items-center justify-center text-lg font-bold">◎</span> 
+                            <span class="font-medium">길</span>
+                        </span>
+                        <span class="flex items-center gap-2">
+                            <span class="w-8 h-8 rounded-lg luck-normal flex items-center justify-center text-lg font-bold border">○</span> 
+                            <span class="font-medium">평</span>
+                        </span>
+                        <span class="flex items-center gap-2">
+                            <span class="w-8 h-8 rounded-lg luck-caution flex items-center justify-center text-lg font-bold">△</span> 
+                            <span class="font-medium text-red-600">주의</span>
+                        </span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 세운 요약 -->
+            <section class="mb-8">
+                <div id="sewunSummary" class="info-card p-6">
+                    <!-- JS로 채워짐 -->
+                </div>
+            </section>
+
+            <!-- 월별 달력 -->
+            <section id="calendarSection">
+                <!-- JS로 채워짐 -->
+            </section>
+        </main>
+
+        <!-- 푸터 -->
+        <footer class="bg-gray-800 text-gray-400 py-8 mt-12 no-print">
+            <div class="max-w-7xl mx-auto px-4 text-center">
+                <p class="text-lg mb-2">사주명가 대운 - 2026 길운 달력</p>
+                <p class="text-sm">본 서비스는 참고용이며, 중요한 결정은 신중하게 판단하시기 바랍니다.</p>
+            </div>
+        </footer>
+    </div>
+
+    <script src="js/saju-calendar.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

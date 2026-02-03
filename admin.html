@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 - 2026 길운 달력</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=Noto+Serif+KR:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Noto Sans KR', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card-shadow {
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        /* 길운 달력 미리보기용 스타일 */
+        .pillar-box {
+            background: linear-gradient(180deg, #1e1b4b 0%, #312e81 100%);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+        .luck-great { background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 100%); border-left: 4px solid #f59e0b; }
+        .luck-good { background: linear-gradient(135deg, #dcfce7 0%, #86efac 100%); border-left: 4px solid #22c55e; }
+        .luck-normal { background: #f9fafb; border-left: 4px solid #9ca3af; }
+        .luck-caution { background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); border-left: 4px solid #ef4444; }
+        .calendar-cell {
+            min-height: 70px;
+            border: 1px solid #e5e7eb;
+            padding: 4px;
+            font-size: 12px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .calendar-cell:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .calendar-cell.empty { background: #f3f4f6; min-height: 70px; }
+        .calendar-cell .day-number { font-weight: 700; font-size: 14px; }
+        .calendar-cell .ganji { font-family: 'Noto Serif KR', serif; font-size: 13px; font-weight: 600; color: #374151; }
+        .calendar-cell .luck-symbol { font-size: 12px; }
+        .calendar-cell.sunday .day-number { color: #dc2626; }
+        .calendar-cell.saturday .day-number { color: #2563eb; }
+        .issue-tag { font-size: 10px; padding: 1px 3px; border-radius: 3px; }
+        .issues-container { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 2px; }
+        .month-theme-good { border-top: 4px solid #f59e0b; background: linear-gradient(180deg, #fffbeb 0%, #fff 100%); }
+        .month-theme-normal { border-top: 4px solid #9ca3af; }
+        .month-theme-caution { border-top: 4px solid #ef4444; background: linear-gradient(180deg, #fef2f2 0%, #fff 100%); }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans min-h-screen">
+    <!-- 로그인 화면 -->
+    <div id="loginScreen" class="fixed inset-0 gradient-bg flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl card-shadow p-8 max-w-md w-full text-center">
+            <div class="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <i class="fas fa-lock text-3xl text-purple-600"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">관리자 로그인</h1>
+            <p class="text-gray-500 mb-6">관리자 비밀번호를 입력하세요</p>
+            
+            <div class="space-y-4">
+                <input type="password" id="adminPassword" placeholder="비밀번호" 
+                       class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-lg"
+                       onkeypress="if(event.key==='Enter') adminLogin()">
+                <button onclick="adminLogin()" 
+                        class="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-xl transition-all">
+                    <i class="fas fa-sign-in-alt mr-2"></i>로그인
+                </button>
+            </div>
+            
+            <p id="loginError" class="text-red-500 mt-4 hidden">비밀번호가 올바르지 않습니다.</p>
+            
+            <div class="mt-8 pt-6 border-t border-gray-200">
+                <a href="index.html" class="text-purple-600 hover:text-purple-700 text-sm font-medium">
+                    <i class="fas fa-arrow-left mr-1"></i> 메인으로 돌아가기
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 메인 콘텐츠 (로그인 후 표시) -->
+    <div id="adminContent" class="hidden">
+    <!-- 헤더 -->
+    <header class="gradient-bg text-white py-4 px-4 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <a href="index.html" class="text-purple-300 hover:text-white transition-colors">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <h1 class="text-xl font-bold">
+                    <i class="fas fa-cog mr-2"></i>관리자 페이지
+                </h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <span id="customerCount" class="text-purple-300 text-sm">
+                    <i class="fas fa-users mr-1"></i>고객 0명
+                </span>
+                <button onclick="adminLogout()" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-sm transition-all">
+                    <i class="fas fa-sign-out-alt mr-1"></i>로그아웃
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- 액션 바 -->
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div class="flex gap-2">
+                <button onclick="openAddModal()" 
+                        class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-all">
+                    <i class="fas fa-plus mr-2"></i>새 고객 등록
+                </button>
+            </div>
+            <div class="flex gap-2">
+                <input type="text" id="searchInput" placeholder="이름 또는 토큰으로 검색..." 
+                       class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                       oninput="searchCustomers()">
+            </div>
+        </div>
+
+        <!-- 고객 목록 -->
+        <div class="bg-white rounded-xl card-shadow overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">이름</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">생년월일</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">토큰</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">등록일</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">메모</th>
+                            <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">액션</th>
+                        </tr>
+                    </thead>
+                    <tbody id="customerTableBody" class="divide-y divide-gray-200">
+                        <!-- JS로 채워짐 -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 빈 상태 -->
+            <div id="emptyState" class="hidden py-16 text-center">
+                <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-users text-3xl text-gray-400"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-600 mb-2">등록된 고객이 없습니다</h3>
+                <p class="text-gray-500 mb-4">새 고객을 등록하여 길운 달력을 제공하세요</p>
+                <button onclick="openAddModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg">
+                    <i class="fas fa-plus mr-2"></i>첫 고객 등록하기
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- 고객 추가/편집 모달 -->
+    <div id="customerModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+                <h2 id="modalTitle" class="text-xl font-bold text-gray-800">새 고객 등록</h2>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <form id="customerForm" class="p-6 space-y-6">
+                <input type="hidden" id="customerId">
+                
+                <!-- 기본 정보 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            고객 이름 <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" id="customerName" required
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               placeholder="홍길동">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            생년월일 <span class="text-red-500">*</span>
+                        </label>
+                        <input type="date" id="birthDate" required
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                               onchange="generateTokenFromBirth()">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        출생 시간
+                    </label>
+                    <input type="time" id="birthTime"
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                    <p class="text-xs text-gray-500 mt-1">모르면 비워두세요</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        성별
+                    </label>
+                    <select id="customerGender"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                        <option value="여성">여성</option>
+                        <option value="남성">남성</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        고유 토큰 (생년월일 8자리)
+                    </label>
+                    <input type="text" id="customerToken" readonly
+                           class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 font-mono"
+                           placeholder="생년월일 입력 시 자동 생성">
+                    <p class="text-xs text-gray-500 mt-1">생년월일 입력 시 자동으로 8자리 토큰이 생성됩니다 (예: 19771006)</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        사주 데이터 (JSON) <span class="text-red-500">*</span>
+                    </label>
+                    <textarea id="sajuData" rows="10" required
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
+                              placeholder='{"pillar": {...}, "daeun": {...}, "sewun": {...}, "user_info": {...}}'></textarea>
+                    <p class="text-xs text-gray-500 mt-1">사주 분석 시스템에서 생성된 JSON 데이터를 붙여넣으세요</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        관리자 메모
+                    </label>
+                    <textarea id="customerMemo" rows="2"
+                              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                              placeholder="관리자용 메모..."></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-4 border-t border-gray-200">
+                    <button type="button" onclick="closeModal()"
+                            class="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-all">
+                        취소
+                    </button>
+                    <button type="submit"
+                            class="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all">
+                        <i class="fas fa-save mr-2"></i>저장
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 링크 복사 모달 -->
+    <div id="linkModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">
+                <i class="fas fa-link text-purple-600 mr-2"></i>고객 전용 링크
+            </h3>
+            <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                <input type="text" id="customerLink" readonly
+                       class="w-full bg-transparent text-sm text-gray-700 outline-none">
+            </div>
+            <div class="flex gap-2">
+                <button onclick="copyLink()" 
+                        class="flex-1 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-all">
+                    <i class="fas fa-copy mr-2"></i>링크 복사
+                </button>
+                <button onclick="closeLinkModal()"
+                        class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-all">
+                    닫기
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 삭제 확인 모달 -->
+    <div id="deleteModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-center">
+            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="fas fa-trash-alt text-2xl text-red-600"></i>
+            </div>
+            <h3 class="text-lg font-bold text-gray-800 mb-2">고객 삭제</h3>
+            <p class="text-gray-600 mb-6">정말로 이 고객을 삭제하시겠습니까?<br>이 작업은 되돌릴 수 없습니다.</p>
+            <input type="hidden" id="deleteCustomerId">
+            <div class="flex gap-2">
+                <button onclick="closeDeleteModal()"
+                        class="flex-1 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-all">
+                    취소
+                </button>
+                <button onclick="confirmDelete()"
+                        class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all">
+                    삭제
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 토스트 알림 -->
+    <div id="toast" class="hidden fixed bottom-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg z-50">
+        <span id="toastMessage"></span>
+    </div>
+
+    <!-- 미리보기 모달 -->
+    <div id="previewModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+                <h3 class="text-lg font-bold text-gray-800"><i class="fas fa-calendar-alt mr-2 text-purple-600"></i>길운 달력 미리보기</h3>
+                <div class="flex gap-2">
+                    <button onclick="downloadPreviewPDF()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all">
+                        <i class="fas fa-file-pdf mr-2"></i>PDF 다운로드
+                    </button>
+                    <button onclick="closePreviewModal()" class="p-2 text-gray-500 hover:bg-gray-200 rounded-lg">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <input type="hidden" id="previewCustomerId">
+            <div id="previewContent" class="overflow-auto flex-1 p-4"></div>
+        </div>
+    </div>
+    
+    </div><!-- adminContent 닫기 -->
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="js/saju-calendar.js"></script>
+    <script src="js/admin.js"></script>
+</body>
+</html>
