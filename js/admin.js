@@ -392,17 +392,28 @@ async function downloadPreviewPDF() {
             for (let m = 1; m <= 12; m++) {
                 showToast(`PDF 생성 중... (${m + 1}/${totalPages})`, 'info');
 
-                // 사주 월 데이터 매핑 (양력 m월 -> JSON sajuMonthNum월)
-                // 1월 -> 12월, 2월 -> 1월 ...
-                const sajuMonthNum = m === 1 ? 12 : m - 1;
-                const monthData = sewun.월운.find(x => x.월 === `${sajuMonthNum}월`);
+                let monthData;
+
+                // 2026년 1월 예외 처리 (기축월)
+                if (m === 1 && FIXED_YEAR === 2026) {
+                    monthData = {
+                        월: '1월',
+                        간지: '己丑', // 기축
+                        십성: '비견/비견', // 임시 평운
+                        신살: '-',
+                        luck: 'normal'
+                    };
+                } else {
+                    // 그 외: 양력 m월 -> 사주 (m-1)월 데이터 매핑
+                    // 예: 2월 -> 1월(경인), 3월 -> 2월(신묘)...
+                    const sajuMonthNum = m - 1;
+                    monthData = sewun.월운.find(x => x.월 === `${sajuMonthNum}월`);
+                }
 
                 if (monthData) {
-                    pdf.addPage(); // 새 페이지 추가 (jsPDF는 기본적으로 이전 페이지 설정 유지)
-
-                    // 컨테이너 내용 교체
+                    pdf.addPage();
                     container.innerHTML = generatePDFMonthPage(FIXED_YEAR, m, monthData, ilgan);
-                    await new Promise(r => setTimeout(r, 300)); // 렌더링 안정화 대기
+                    await new Promise(r => setTimeout(r, 300));
 
                     canvas = await html2canvas(container, {
                         scale: 2,
@@ -442,20 +453,22 @@ function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
     const daeun = sajuData.daeun || {}; // Fix: Destructure daeun from sajuData with fallback
 
     const pillarsHtml = pillars.map(p => {
-        const name = p.title.split(' ')[0];
-        const ganji = p.ganji;
-        const sipseong = p.cheon_sip + '/' + p.ji_sip;
+        const title = p.title || '';
+        const name = title.split(' ')[0] || '';
+        const ganji = p.ganji || '??';
+        const sipseong = (p.cheon_sip || '') + '/' + (p.ji_sip || '');
 
         return `<div style="background:linear-gradient(180deg,#1e1b4b,#312e81);border-radius:12px;padding:16px;text-align:center;color:white;min-width:90px;">
             <div style="font-size:12px;color:#c4b5fd;margin-bottom:6px;">${name}</div>
-            <div style="font-family:'Noto Serif KR',serif;font-size:40px;font-weight:900;">${ganji[0]}</div>
-            <div style="font-family:'Noto Serif KR',serif;font-size:40px;font-weight:900;">${ganji[1]}</div>
-            <div style="font-size:11px;color:#c4b5fd;margin-top:6px;">${sipseong.split('/')[0]}</div>
+            <div style="font-family:'Noto Serif KR',serif;font-size:40px;font-weight:900;">${ganji[0] || '?'}</div>
+            <div style="font-family:'Noto Serif KR',serif;font-size:40px;font-weight:900;">${ganji[1] || '?'}</div>
+            <div style="font-size:11px;color:#c4b5fd;margin-top:6px;">${sipseong.split('/')[0] || '-'}</div>
         </div>`;
     }).join('');
 
-    return `<div style="font-family:'Noto Sans KR',sans-serif;background:white;width:100%;height:100%;padding:30px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;">
-        <div style="text-align:center;">
+    // Layout Fix: Use gap instead of space-between and remove height:100% constraint that causes overlap
+    return `<div style="font-family:'Noto Sans KR',sans-serif;background:white;width:100%;height:100%;padding:40px;box-sizing:border-box;display:flex;flex-direction:column;gap:25px;">
+        <div style="text-align:center;margin-bottom:10px;">
             <div style="width:80px;height:80px;background:linear-gradient(135deg,#7c3aed,#4338ca);border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;">
                 <div style="color:white;text-align:center;"><div style="font-size:12px;">사주명가</div><div style="font-size:20px;font-weight:bold;">대운</div></div>
             </div>
@@ -463,7 +476,7 @@ function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
             <p style="color:#6b7280;font-size:18px;margin:12px 0 0;">${customer.name}님의 개인 맞춤 운세 캘린더</p>
         </div>
         
-        <div style="background:#f9fafb;border-radius:12px;padding:20px;">
+        <div style="background:#f9fafb;border-radius:12px;padding:25px;">
             <h2 style="font-size:16px;font-weight:bold;color:#374151;margin:0 0 12px;">📋 기본 정보</h2>
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
                 <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">생년월일시</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${customer.birth_info}</div></div>
@@ -473,7 +486,7 @@ function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
             </div>
         </div>
         
-        <div>
+        <div style="flex-grow:1;">
             <h2 style="font-size:16px;font-weight:bold;color:#374151;margin:0 0 12px;">🔮 사주팔자</h2>
             <div style="display:flex;gap:12px;justify-content:center;">${pillarsHtml}</div>
         </div>
