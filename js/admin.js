@@ -450,7 +450,69 @@ async function downloadPreviewPDF() {
 function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
     const userInfo = sajuData.user_info;
     const pillars = sajuData.pillars;
-    const daeun = sajuData.daeun || {}; // Fix: Destructure daeun from sajuData with fallback
+    const daeun = sajuData.daeun || {};
+
+    // --- 시주 재계산 로직 시작 ---
+    try {
+        const timeMatch = customer.birth_info.match(/(\d{1,2}):(\d{2})/);
+        const ilganChar = userInfo['일주'] ? userInfo['일주'].charAt(0) : '';
+
+        if (timeMatch && ilganChar) {
+            let hour = parseInt(timeMatch[1]);
+            let minute = parseInt(timeMatch[2]);
+
+            // 24시간제 보정 (혹시 모를 오류 방지)
+            if (hour >= 24) hour = hour % 24;
+
+            // 1. 시지(Time Branch) 계산
+            // 23:30 ~ 01:29 = 자시, 01:30 ~ 03:29 = 축시 ...
+            // 시간을 분으로 환산하여 계산
+            let totalMinutes = hour * 60 + minute;
+            // 자시 시작(23:30)을 기준점 0으로 맞추기 위해 30분 더함 (24시간 = 1440분)
+            // (Total + 30) % 1440 / 120(2시간)
+            let adjustedMinutes = (totalMinutes + 30) % 1440;
+            let jijiIndex = Math.floor(adjustedMinutes / 120);
+
+            // JIJI 배열: ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']
+            // jijiIndex 0 = 자시, 1 = 축시 ...
+            const JIJIS = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+            let siji = JIJIS[jijiIndex];
+
+            // 2. 시간(Time Stem) 계산 (시두법)
+            const CHEONGANS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
+            let startStemIndex = 0;
+
+            // 일간에 따른 자시의 천간 시작점
+            // 甲(0), 己(5) -> 甲(0)
+            // 乙(1), 庚(6) -> 丙(2)
+            // 丙(2), 辛(7) -> 戊(4)
+            // 丁(3), 壬(8) -> 庚(6)
+            // 戊(4), 癸(9) -> 壬(8)
+            const ilganIndex = CHEONGANS.indexOf(ilganChar);
+            if (ilganIndex !== -1) {
+                const mod = ilganIndex % 5;
+                if (mod === 0) startStemIndex = 0; // 갑기
+                else if (mod === 1) startStemIndex = 2; // 을경
+                else if (mod === 2) startStemIndex = 4; // 병신
+                else if (mod === 3) startStemIndex = 6; // 정임
+                else if (mod === 4) startStemIndex = 8; // 무계
+
+                let siganIndex = (startStemIndex + jijiIndex) % 10;
+                let sigan = CHEONGANS[siganIndex];
+
+                // 3. Pillars 데이터 업데이트
+                const sijuPillar = pillars.find(p => p.title && p.title.includes('시'));
+                if (sijuPillar) {
+                    // console.log(`시주 보정: ${sijuPillar.ganji} -> ${sigan}${siji}`);
+                    sijuPillar.ganji = sigan + siji;
+                    // 십성은 복잡하므로 여기서는 간지만 수정 (화면 표시 목적)
+                }
+            }
+        }
+    } catch (e) {
+        console.error("시주 재계산 중 오류:", e);
+    }
+    // --- 시주 재계산 로직 끝 ---
 
     const pillarsHtml = pillars.map(p => {
         const title = p.title || '';
