@@ -439,6 +439,7 @@ async function downloadPreviewPDF() {
 function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
     const userInfo = sajuData.user_info;
     const pillars = sajuData.pillars;
+    const daeun = sajuData.daeun; // Fix: Destructure daeun from sajuData
 
     const pillarsHtml = pillars.map(p => {
         const name = p.title.split(' ')[0];
@@ -530,7 +531,7 @@ function generatePDFMonthPage(year, month, monthData, ilgan) {
 
     // 빈 셀
     for (let i = 0; i < startDayOfWeek; i++) {
-        cells += '<div style="background:#fafafa;min-height:60px;border-radius:4px;"></div>';
+        cells += '<div style="background:#fafafa;min-height:55px;border-radius:4px;"></div>';
     }
 
     // 날짜 셀
@@ -546,7 +547,7 @@ function generatePDFMonthPage(year, month, monthData, ilgan) {
 
         let issueIcons = issues.slice(0, 3).map(i => i.icon).join('');
 
-        cells += `<div style="background:${bgColor};min-height:60px;border-radius:4px;padding:4px;border-left:${leftBorder};">
+        cells += `<div style="background:${bgColor};min-height:55px;border-radius:4px;padding:4px;border-left:${leftBorder};">
             <div style="display:flex;justify-content:space-between;align-items:center;">
                 <span style="font-weight:bold;font-size:15px;color:${textColor};">${day}</span>
                 <span style="font-size:13px;">${dayLuck.symbol}</span>
@@ -556,9 +557,9 @@ function generatePDFMonthPage(year, month, monthData, ilgan) {
         </div>`;
     }
 
-    return `<div style="font-family:'Noto Sans KR',sans-serif;background:white;width:100%;height:100%;padding:20px;box-sizing:border-box;display:flex;flex-direction:column;">
+    return `<div style="font-family:'Noto Sans KR',sans-serif;background:white;width:100%;height:100%;padding:15px;box-sizing:border-box;display:flex;flex-direction:column;">
         <!-- 월 헤더 -->
-        <div style="background:${headerBg};border-radius:12px;padding:12px 20px;margin-bottom:12px;border-left:5px solid ${borderColor};flex-shrink:0;">
+        <div style="background:${headerBg};border-radius:12px;padding:12px 15px;margin-bottom:8px;border-left:5px solid ${borderColor};flex-shrink:0;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
                 <div>
                     <div style="font-size:13px;color:#6b7280;">${year}년</div>
@@ -581,7 +582,7 @@ function generatePDFMonthPage(year, month, monthData, ilgan) {
         </div>
         
         <!-- 하단 범례 (고정) -->
-        <div style="margin-top:10px;padding:8px;background:#f3f4f6;border-radius:8px;display:flex;justify-content:center;gap:12px;font-size:10px;flex-wrap:wrap;flex-shrink:0;">
+        <div style="margin-top:5px;padding:6px;background:#f3f4f6;border-radius:8px;display:flex;justify-content:center;gap:10px;font-size:9px;flex-wrap:wrap;flex-shrink:0;">
             <span>★대길</span><span>◎길</span><span>○평</span><span>△주의</span>
             <span style="margin-left:12px;">💰재물 📈사업 ✈️이동 🤝귀인 📝문서 ⭐인기 📚학습 🤲협력 🔄변화 ⚠️건강주의</span>
         </div>
