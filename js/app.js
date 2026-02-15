@@ -234,6 +234,8 @@ function renderSewunSummary(sewunData, year) {
 
 // ========== 월별 달력 렌더링 ==========
 
+// ========== 월별 달력 렌더링 ==========
+
 function renderMonthlyCalendars(sajuData, year) {
     const sewun = sajuData.sewun.data.find(s => s.연도 === year);
     if (!sewun) return;
@@ -243,60 +245,68 @@ function renderMonthlyCalendars(sajuData, year) {
 
     let html = '<div class="space-y-10">';
 
-    sewun.월운.forEach((monthData, index) => {
-        const month = index + 1;
-        const calendarData = SajuCalendar.generateCalendarData(year, month, ilgan, monthData);
+    // 양력 1월 ~ 12월 루프
+    for (let m = 1; m <= 12; m++) {
+        // 사주 월 매핑: 양력 2월(In) -> JSON "1월"
+        // 양력 1월(Chuk) -> JSON "12월" (전년도 데이터가 없으면 현재 데이터의 12월을 임시 매핑하거나 처리 필요)
+        // 여기서는 순환 매핑(1월<-12월)을 적용하여 데이터 공백을 방지합니다.
+        const sajuMonthNum = m === 1 ? 12 : m - 1;
+        const monthData = sewun.월운.find(x => x.월 === `${sajuMonthNum}월`);
 
-        const greatCount = calendarData.days.filter(d => d.luck === 'great').length;
-        const cautionCount = calendarData.days.filter(d => d.luck === 'caution').length;
-        let monthTheme = 'month-theme-normal';
-        if (greatCount >= 8) monthTheme = 'month-theme-good';
-        else if (cautionCount >= 8) monthTheme = 'month-theme-caution';
+        if (monthData) {
+            const calendarData = SajuCalendar.generateCalendarData(year, m, ilgan, monthData);
 
-        const issuesSummary = generateIssuesSummary(calendarData.summary.issuesByType);
+            const greatCount = calendarData.days.filter(d => d.luck === 'great').length;
+            const cautionCount = calendarData.days.filter(d => d.luck === 'caution').length;
+            let monthTheme = 'month-theme-normal';
+            if (greatCount >= 8) monthTheme = 'month-theme-good';
+            else if (cautionCount >= 8) monthTheme = 'month-theme-caution';
 
-        html += `
-            <div class="info-card ${monthTheme} month-calendar" data-month="${month}">
-                <div class="p-6 bg-gradient-to-r from-gray-50 to-white border-b">
-                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div class="flex items-center gap-4">
-                            <span class="text-4xl font-black text-gray-800">${month}월</span>
-                            <span class="text-3xl font-serif font-bold text-purple-700">${monthData.간지}</span>
-                            <span class="text-lg text-gray-600 font-medium">${monthData.십성}</span>
-                            ${monthData.신살 && monthData.신살 !== '-' ? `<span class="text-base bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-medium">${monthData.신살}</span>` : ''}
+            const issuesSummary = generateIssuesSummary(calendarData.summary.issuesByType);
+
+            html += `
+                <div class="info-card ${monthTheme} month-calendar" data-month="${m}">
+                    <div class="p-6 bg-gradient-to-r from-gray-50 to-white border-b">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                            <div class="flex items-center gap-4">
+                                <span class="text-4xl font-black text-gray-800">${m}월</span>
+                                <span class="text-3xl font-serif font-bold text-purple-700">${monthData.간지}</span>
+                                <span class="text-lg text-gray-600 font-medium">${monthData.십성}</span>
+                                ${monthData.신살 && monthData.신살 !== '-' ? `<span class="text-base bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-medium">${monthData.신살}</span>` : ''}
+                            </div>
+                            <div class="text-lg">
+                                <span class="text-amber-600 font-bold">★길일 ${calendarData.summary.goodDays.length > 0 ? calendarData.summary.goodDays.join(', ') + '일' : '-'}</span>
+                                ${calendarData.summary.cautionDays.length > 0 ? `<span class="ml-4 text-red-500 font-bold">△주의 ${calendarData.summary.cautionDays.join(', ')}일</span>` : ''}
+                            </div>
                         </div>
-                        <div class="text-lg">
-                            <span class="text-amber-600 font-bold">★길일 ${calendarData.summary.goodDays.length > 0 ? calendarData.summary.goodDays.join(', ') + '일' : '-'}</span>
-                            ${calendarData.summary.cautionDays.length > 0 ? `<span class="ml-4 text-red-500 font-bold">△주의 ${calendarData.summary.cautionDays.join(', ')}일</span>` : ''}
+                        <div class="mt-4 p-4 bg-white rounded-xl border text-base">
+                            <div class="flex flex-wrap gap-6 mb-3">
+                                <span><strong class="text-purple-700">📌 키워드:</strong> ${calendarData.summary.keyword}</span>
+                                <span><strong class="text-gray-600">💡 조언:</strong> ${calendarData.summary.advice}</span>
+                                ${calendarData.summary.sinsalNote ? `<span><strong class="text-orange-600">✨ 특징:</strong> ${calendarData.summary.sinsalNote}</span>` : ''}
+                            </div>
+                            ${issuesSummary ? `<div class="pt-3 border-t border-gray-100">${issuesSummary}</div>` : ''}
                         </div>
                     </div>
-                    <div class="mt-4 p-4 bg-white rounded-xl border text-base">
-                        <div class="flex flex-wrap gap-6 mb-3">
-                            <span><strong class="text-purple-700">📌 키워드:</strong> ${calendarData.summary.keyword}</span>
-                            <span><strong class="text-gray-600">💡 조언:</strong> ${calendarData.summary.advice}</span>
-                            ${calendarData.summary.sinsalNote ? `<span><strong class="text-orange-600">✨ 특징:</strong> ${calendarData.summary.sinsalNote}</span>` : ''}
+                    
+                    <div class="p-4 md:p-6">
+                        <div class="grid grid-cols-7 text-center text-lg font-bold mb-2">
+                            <div class="py-3 text-red-500">일</div>
+                            <div class="py-3 text-gray-700">월</div>
+                            <div class="py-3 text-gray-700">화</div>
+                            <div class="py-3 text-gray-700">수</div>
+                            <div class="py-3 text-gray-700">목</div>
+                            <div class="py-3 text-gray-700">금</div>
+                            <div class="py-3 text-blue-500">토</div>
                         </div>
-                        ${issuesSummary ? `<div class="pt-3 border-t border-gray-100">${issuesSummary}</div>` : ''}
+                        <div class="grid grid-cols-7 gap-1">
+                            ${renderCalendarDays(calendarData)}
+                        </div>
                     </div>
                 </div>
-                
-                <div class="p-4 md:p-6">
-                    <div class="grid grid-cols-7 text-center text-lg font-bold mb-2">
-                        <div class="py-3 text-red-500">일</div>
-                        <div class="py-3 text-gray-700">월</div>
-                        <div class="py-3 text-gray-700">화</div>
-                        <div class="py-3 text-gray-700">수</div>
-                        <div class="py-3 text-gray-700">목</div>
-                        <div class="py-3 text-gray-700">금</div>
-                        <div class="py-3 text-blue-500">토</div>
-                    </div>
-                    <div class="grid grid-cols-7 gap-1">
-                        ${renderCalendarDays(calendarData)}
-                    </div>
-                </div>
-            </div>
-        `;
-    });
+            `;
+        }
+    }
 
     html += '</div>';
     document.getElementById('calendarSection').innerHTML = html;

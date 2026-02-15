@@ -387,12 +387,16 @@ async function downloadPreviewPDF() {
         let imgData = canvas.toDataURL('image/jpeg', 0.9); // JPEG 압축
         pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight); // PDF 페이지에 이미지 추가
 
-        // --- 2. 월별 페이지 생성 ---
+        // --- 2. 월별 달력
         if (sewun && sewun.월운) {
             for (let m = 1; m <= 12; m++) {
                 showToast(`PDF 생성 중... (${m + 1}/${totalPages})`, 'info');
 
-                const monthData = sewun.월운.find(x => x.월 === `${m}월`);
+                // 사주 월 데이터 매핑 (양력 m월 -> JSON sajuMonthNum월)
+                // 1월 -> 12월, 2월 -> 1월 ...
+                const sajuMonthNum = m === 1 ? 12 : m - 1;
+                const monthData = sewun.월운.find(x => x.월 === `${sajuMonthNum}월`);
+
                 if (monthData) {
                     pdf.addPage(); // 새 페이지 추가 (jsPDF는 기본적으로 이전 페이지 설정 유지)
 
