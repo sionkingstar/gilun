@@ -439,7 +439,7 @@ async function downloadPreviewPDF() {
 function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
     const userInfo = sajuData.user_info;
     const pillars = sajuData.pillars;
-    const daeun = sajuData.daeun; // Fix: Destructure daeun from sajuData
+    const daeun = sajuData.daeun || {}; // Fix: Destructure daeun from sajuData with fallback
 
     const pillarsHtml = pillars.map(p => {
         const name = p.title.split(' ')[0];
@@ -469,7 +469,7 @@ function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
                 <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">생년월일시</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${customer.birth_info}</div></div>
                 <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">일간(본인)</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${userInfo['일주'].charAt(0)}</div></div>
                 <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">성별</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${customer.gender}</div></div>
-                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">대운방향</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${daeun.direction}</div></div>
+                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">대운방향</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${daeun && daeun.direction ? daeun.direction : '-'}</div></div>
             </div>
         </div>
         
