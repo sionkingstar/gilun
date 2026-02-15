@@ -352,55 +352,66 @@ async function downloadPreviewPDF() {
 
         // jsPDF 초기화 (가로 A4)
         const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF('landscape', 'mm', 'a4');
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
+        const pdf = new jsPDF('l', 'mm', 'a4'); // 'l' for landscape
+        const pageWidth = 297; // A4 landscape width in mm
+        const pageHeight = 210; // A4 landscape height in mm
+
+        // A4 픽셀 크기 (96 DPI 기준)
+        const a4WidthPx = 1123; // 297mm * 96dpi / 25.4mm/inch
+        const a4HeightPx = 794; // 210mm * 96dpi / 25.4mm/inch
+
+        // 임시 컨테이너 (화면 밖 고정 크기)
+        container = document.createElement('div');
+        container.style.cssText = `position:fixed; top:-9999px; left:-9999px; width:${a4WidthPx}px; height:${a4HeightPx}px; background:white; z-index:-1; font-family:'Noto Sans KR', sans-serif; box-sizing:border-box; overflow:hidden;`;
+        document.body.appendChild(container);
 
         // 총 페이지: 1(표지) + 12(월별)
         const totalPages = 13;
 
-        // 임시 컨테이너
-        container = document.createElement('div');
-        container.style.cssText = 'position:fixed;top:0;left:0;width:297mm;height:210mm;background:white;z-index:9999;font-family:"Noto Sans KR", sans-serif;';
-        document.body.appendChild(container);
-
-        // 1페이지: 표지
+        // --- 1. 표지 생성 ---
         showToast(`PDF 생성 중... (1/${totalPages})`, 'info');
         container.innerHTML = generatePDFCoverPage(customer, sajuData, FIXED_YEAR, currentDaeun, sewun);
-        // 레이아웃 안정화를 위해 잠시 대기
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 500)); // 렌더링 안정화 대기
 
         let canvas = await html2canvas(container, {
-            scale: 2,
+            scale: 2, // 고해상도 렌더링
             useCORS: true,
-            backgroundColor: '#ffffff',
             logging: false,
-            width: container.offsetWidth,
-            height: container.offsetHeight
+            width: a4WidthPx,
+            height: a4HeightPx,
+            windowWidth: a4WidthPx, // html2canvas가 렌더링할 뷰포트 너비
+            windowHeight: a4HeightPx, // html2canvas가 렌더링할 뷰포트 높이
+            scrollY: -window.scrollY, // 현재 스크롤 위치 보정
+            scrollX: -window.scrollX
         });
-        let imgData = canvas.toDataURL('image/jpeg', 0.95);
-        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
+        let imgData = canvas.toDataURL('image/jpeg', 0.9); // JPEG 압축
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight); // PDF 페이지에 이미지 추가
 
-        // 2~13페이지: 월별 달력
+        // --- 2. 월별 페이지 생성 ---
         if (sewun && sewun.월운) {
             for (let m = 1; m <= 12; m++) {
                 showToast(`PDF 생성 중... (${m + 1}/${totalPages})`, 'info');
 
                 const monthData = sewun.월운.find(x => x.월 === `${m}월`);
                 if (monthData) {
-                    pdf.addPage('a4', 'landscape'); // 명시적 가로 방향 설정
+                    pdf.addPage(); // 새 페이지 추가 (jsPDF는 기본적으로 이전 페이지 설정 유지)
+
+                    // 컨테이너 내용 교체
                     container.innerHTML = generatePDFMonthPage(FIXED_YEAR, m, monthData, ilgan);
-                    await new Promise(r => setTimeout(r, 500));
+                    await new Promise(r => setTimeout(r, 300)); // 렌더링 안정화 대기
 
                     canvas = await html2canvas(container, {
                         scale: 2,
                         useCORS: true,
-                        backgroundColor: '#ffffff',
                         logging: false,
-                        width: container.offsetWidth,
-                        height: container.offsetHeight
+                        width: a4WidthPx,
+                        height: a4HeightPx,
+                        windowWidth: a4WidthPx,
+                        windowHeight: a4HeightPx,
+                        scrollY: -window.scrollY,
+                        scrollX: -window.scrollX
                     });
-                    imgData = canvas.toDataURL('image/jpeg', 0.95);
+                    imgData = canvas.toDataURL('image/jpeg', 0.9);
                     pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
                 }
             }
