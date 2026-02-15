@@ -341,11 +341,11 @@ async function downloadPreviewPDF() {
     try {
         const sajuData = JSON.parse(customer.saju_data);
         const userInfo = sajuData.user_info;
-        const pillar = sajuData.pillar;
+        const pillars = sajuData.pillars;
         const daeun = sajuData.daeun;
         const sewun = sajuData.sewun.data.find(s => s.연도 === FIXED_YEAR);
         const currentDaeun = daeun.data.find(d => d.연도 <= FIXED_YEAR && d.연도 + 10 > FIXED_YEAR);
-        const ilgan = userInfo['일간(본인)'] ? userInfo['일간(본인)'].charAt(0) : '丙';
+        const ilgan = userInfo['일주'] ? userInfo['일주'].charAt(0) : '丙';
 
         // jsPDF 초기화 (가로 A4)
         const { jsPDF } = window.jspdf;
@@ -404,10 +404,13 @@ async function downloadPreviewPDF() {
 // PDF 표지 페이지 HTML
 function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
     const userInfo = sajuData.user_info;
-    const pillar = sajuData.pillar;
+    const pillars = sajuData.pillars;
 
-    const pillarsHtml = [...pillar.data].reverse().map(p => {
-        const [name, ganji, sipseong] = p;
+    const pillarsHtml = pillars.map(p => {
+        const name = p.title.split(' ')[0];
+        const ganji = p.ganji;
+        const sipseong = p.cheon_sip + '/' + p.ji_sip;
+
         return `<div style="background:linear-gradient(180deg,#1e1b4b,#312e81);border-radius:12px;padding:16px;text-align:center;color:white;min-width:90px;">
             <div style="font-size:12px;color:#c4b5fd;margin-bottom:6px;">${name}</div>
             <div style="font-family:'Noto Serif KR',serif;font-size:40px;font-weight:900;">${ganji[0]}</div>
@@ -428,10 +431,10 @@ function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
         <div style="background:#f9fafb;border-radius:12px;padding:20px;margin-bottom:20px;">
             <h2 style="font-size:16px;font-weight:bold;color:#374151;margin:0 0 12px;">📋 기본 정보</h2>
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
-                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">생년월일시</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${userInfo['입력정보']}</div></div>
-                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">일간(본인)</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${userInfo['일간(본인)']}</div></div>
-                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">성별</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${userInfo['성별']}</div></div>
-                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">대운방향</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${userInfo['대운방향']}</div></div>
+                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">생년월일시</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${customer.birth_info}</div></div>
+                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">일간(본인)</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${userInfo['일주'].charAt(0)}</div></div>
+                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">성별</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${customer.gender}</div></div>
+                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">대운방향</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${daeun.direction}</div></div>
             </div>
         </div>
         
@@ -570,20 +573,24 @@ function getLuckLabel(luck) {
 
 function generateFullCalendarPreview(customer, sajuData, year) {
     const userInfo = sajuData.user_info;
-    const pillar = sajuData.pillar;
+    const pillars = sajuData.pillars;
     const daeun = sajuData.daeun;
     const sewun = sajuData.sewun.data.find(s => s.연도 === year);
     const currentDaeun = daeun.data.find(d => d.연도 <= year && d.연도 + 10 > year);
 
-    const pillarsHtml = [...pillar.data].reverse().map(p => {
-        const [name, ganji, sipseong] = p;
+    // 새 구조에 맞게 매핑
+    const pillarsHtml = pillars.map(p => {
+        const name = p.title.split(' ')[0]; // "시주"
+        const ganji = p.ganji; // "戊辰"
+        const sipseong = p.cheon_sip + '/' + p.ji_sip; // "겁재/겁재"
+
         return `<div class="pillar-box text-center text-white" style="min-width:70px;">
             <div class="text-xs text-purple-300 mb-1">${name}</div>
             <div class="font-serif text-2xl font-black">${ganji[0]}</div>
             <div class="font-serif text-2xl font-black">${ganji[1]}</div>
             <div class="text-xs text-purple-300 mt-1">${sipseong.split('/')[0]}</div>
         </div>`;
-    }).join('');
+    }).join(''); // 새 데이터는 시주부터 시작하므로 reverse 없이 그대로 쓰면 시주가 왼쪽
 
     let calendarsHtml = '';
     if (sewun && sewun.월운) {
@@ -611,10 +618,10 @@ function generateFullCalendarPreview(customer, sajuData, year) {
                 <div class="flex-grow">
                     <h3 class="text-sm font-bold text-gray-600 mb-3">기본 정보</h3>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                        <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">생년월일시</div><div class="font-medium">${userInfo['입력정보']}</div></div>
-                        <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">일간</div><div class="font-medium">${userInfo['일간(본인)']}</div></div>
-                        <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">성별</div><div class="font-medium">${userInfo['성별']}</div></div>
-                        <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">대운방향</div><div class="font-medium">${userInfo['대운방향']}</div></div>
+                        <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">생년월일시</div><div class="font-medium">${customer.birth_info || '-'}</div></div>
+                        <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">일간</div><div class="font-medium">${userInfo['일주'].charAt(0)}</div></div>
+                        <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">성별</div><div class="font-medium">${customer.gender}</div></div>
+                        <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">대운방향</div><div class="font-medium">${daeun.direction}</div></div>
                     </div>
                     ${currentDaeun ? `<div class="mt-4 bg-purple-50 p-4 rounded-lg flex justify-between items-center">
                         <div><span class="text-purple-700 font-bold">현재 대운</span><span class="text-gray-500 text-sm ml-2">(${currentDaeun.연도}~${currentDaeun.연도 + 9})</span></div>
@@ -649,7 +656,7 @@ function generateMonthCalendarHtml(year, month, monthData, userInfo) {
     const lastDay = new Date(year, month, 0);
     const startDayOfWeek = firstDay.getDay();
     const totalDays = lastDay.getDate();
-    const ilgan = userInfo['일간(본인)'] ? userInfo['일간(본인)'].charAt(0) : '丙';
+    const ilgan = userInfo['일주'] ? userInfo['일주'].charAt(0) : '丙';
 
     let cells = '';
     for (let i = 0; i < startDayOfWeek; i++) cells += '<div class="calendar-cell empty"></div>';

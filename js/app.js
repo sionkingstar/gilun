@@ -98,15 +98,20 @@ function renderCalendar() {
     document.getElementById('userGreeting').textContent =
         `${currentCustomer.name}님의 ${FIXED_YEAR}년 개인 맞춤 운세 캘린더`;
 
-    renderUserInfo(sajuData.user_info);
-    renderPillars(sajuData.pillar);
+    renderUserInfo(sajuData);
+    renderPillars(sajuData.pillars);
     renderCurrentDaeun(sajuData.daeun, FIXED_YEAR);
     renderSewunSummary(sajuData.sewun.data, FIXED_YEAR);
     renderMonthlyCalendars(sajuData, FIXED_YEAR);
 }
 
 // 사용자 정보 렌더링
-function renderUserInfo(userInfo) {
+function renderUserInfo(sajuData) {
+    const userInfo = sajuData.user_info;
+
+    // 일간 추출 (일주의 첫 글자)
+    const ilgan = userInfo['일주'] ? userInfo['일주'].charAt(0) : '丙';
+
     const html = `
         <h3 class="text-lg font-bold text-gray-700 mb-4 flex items-center">
             <i class="fas fa-user text-purple-500 mr-2"></i>기본 정보
@@ -114,19 +119,19 @@ function renderUserInfo(userInfo) {
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4 overflow-hidden">
                 <span class="text-gray-500 text-sm">생년월일시</span>
-                <p class="font-bold text-gray-800 text-sm mt-1">${userInfo['입력정보']}</p>
+                <p class="font-bold text-gray-800 text-sm mt-1">${currentCustomer.birth_info || '-'}</p>
             </div>
             <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4">
                 <span class="text-gray-500 text-sm">일간(본인)</span>
-                <p class="font-bold text-gray-800 text-lg mt-1">${userInfo['일간(본인)']}</p>
+                <p class="font-bold text-gray-800 text-lg mt-1">${ilgan}</p>
             </div>
             <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4">
                 <span class="text-gray-500 text-sm">성별</span>
-                <p class="font-bold text-gray-800 text-lg mt-1">${userInfo['성별']}</p>
+                <p class="font-bold text-gray-800 text-lg mt-1">${currentCustomer.gender || '-'}</p>
             </div>
             <div class="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-4">
                 <span class="text-gray-500 text-sm">대운방향</span>
-                <p class="font-bold text-gray-800 text-lg mt-1">${userInfo['대운방향']}</p>
+                <p class="font-bold text-gray-800 text-lg mt-1">${sajuData.daeun.direction || '-'}</p>
             </div>
         </div>
     `;
@@ -134,26 +139,28 @@ function renderUserInfo(userInfo) {
 }
 
 // 사주 기둥 렌더링
-function renderPillars(pillar) {
-    const pillars = pillar.data;
+function renderPillars(pillars) {
     let html = '';
 
-    // 시주, 일주, 월주, 년주 순서로 (왼쪽→오른쪽)
-    const labels = ['시주 (말년)', '일주 (본인)', '월주 (사회)', '년주 (조상)'];
-
-    pillars.slice().reverse().forEach((p, idx) => {
-        const [name, ganji, sipseong, sinsal] = p;
+    // pillars 배열 순서: 시주, 일주, 월주, 년주
+    pillars.forEach((p) => {
+        const title = p.title.split(' ')[0]; // "시주"
+        const ganji = p.ganji;
         const cheongan = ganji[0];
         const jiji = ganji[1];
-        const sipseongParts = sipseong.split('/');
+
+        // 십성: "겁재/비견" -> 천간십성/지지십성
+        const cheonSip = p.cheon_sip;
+        const jiSip = p.ji_sip;
+        const sinsal = p.sinsal;
 
         html += `
             <div class="pillar-box text-center text-white min-w-[75px]">
-                <div class="text-xs text-purple-300 mb-2 font-medium">${labels[idx]}</div>
+                <div class="text-xs text-purple-300 mb-2 font-medium">${p.title}</div>
                 <div class="hanja-large">${cheongan}</div>
-                <div class="text-xs text-purple-300 my-1">${sipseongParts[0]}</div>
+                <div class="text-xs text-purple-300 my-1">${cheonSip}</div>
                 <div class="hanja-large">${jiji}</div>
-                <div class="text-xs text-purple-300 mt-1">${sipseongParts[1] || ''}</div>
+                <div class="text-xs text-purple-300 mt-1">${jiSip}</div>
                 ${sinsal && sinsal !== '-' ? `<div class="text-[10px] text-yellow-300 mt-2">${sinsal}</div>` : ''}
             </div>
         `;
@@ -231,8 +238,8 @@ function renderMonthlyCalendars(sajuData, year) {
     const sewun = sajuData.sewun.data.find(s => s.연도 === year);
     if (!sewun) return;
 
-    const ilganFull = sajuData.user_info['일간(본인)'];
-    const ilgan = ilganFull ? ilganFull[0] : '丙';
+    const userInfo = sajuData.user_info;
+    const ilgan = userInfo['일주'] ? userInfo['일주'].charAt(0) : '丙';
 
     let html = '<div class="space-y-10">';
 
