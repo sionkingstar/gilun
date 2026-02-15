@@ -333,10 +333,13 @@ function closePreviewModal() {
     document.getElementById('previewModal').classList.add('hidden');
 }
 
+
 async function downloadPreviewPDF() {
     const customerId = document.getElementById('previewCustomerId').value;
     const customer = customers.find(c => c.id === customerId);
     if (!customer) { showToast('고객을 찾을 수 없습니다', 'error'); return; }
+
+    let container = null;
 
     try {
         const sajuData = JSON.parse(customer.saju_data);
@@ -357,16 +360,24 @@ async function downloadPreviewPDF() {
         const totalPages = 13;
 
         // 임시 컨테이너
-        const container = document.createElement('div');
-        container.style.cssText = 'position:fixed;top:0;left:0;width:297mm;background:white;z-index:9999;';
+        container = document.createElement('div');
+        container.style.cssText = 'position:fixed;top:0;left:0;width:297mm;height:210mm;background:white;z-index:9999;font-family:"Noto Sans KR", sans-serif;';
         document.body.appendChild(container);
 
         // 1페이지: 표지
         showToast(`PDF 생성 중... (1/${totalPages})`, 'info');
         container.innerHTML = generatePDFCoverPage(customer, sajuData, FIXED_YEAR, currentDaeun, sewun);
-        await new Promise(r => setTimeout(r, 300));
+        // 레이아웃 안정화를 위해 잠시 대기
+        await new Promise(r => setTimeout(r, 500));
 
-        let canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+        let canvas = await html2canvas(container, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            logging: false,
+            width: container.offsetWidth,
+            height: container.offsetHeight
+        });
         let imgData = canvas.toDataURL('image/jpeg', 0.95);
         pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
 
@@ -377,19 +388,23 @@ async function downloadPreviewPDF() {
 
                 const monthData = sewun.월운.find(x => x.월 === `${m}월`);
                 if (monthData) {
-                    pdf.addPage();
+                    pdf.addPage('a4', 'landscape'); // 명시적 가로 방향 설정
                     container.innerHTML = generatePDFMonthPage(FIXED_YEAR, m, monthData, ilgan);
-                    await new Promise(r => setTimeout(r, 300));
+                    await new Promise(r => setTimeout(r, 500));
 
-                    canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+                    canvas = await html2canvas(container, {
+                        scale: 2,
+                        useCORS: true,
+                        backgroundColor: '#ffffff',
+                        logging: false,
+                        width: container.offsetWidth,
+                        height: container.offsetHeight
+                    });
                     imgData = canvas.toDataURL('image/jpeg', 0.95);
                     pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight);
                 }
             }
         }
-
-        // 컨테이너 제거
-        document.body.removeChild(container);
 
         // PDF 저장
         pdf.save(`${customer.name}_${FIXED_YEAR}년_길운달력.pdf`);
@@ -398,6 +413,10 @@ async function downloadPreviewPDF() {
     } catch (error) {
         console.error('PDF error:', error);
         showToast('PDF 생성 오류: ' + error.message, 'error');
+    } finally {
+        if (container && document.body.contains(container)) {
+            document.body.removeChild(container);
+        }
     }
 }
 
@@ -419,8 +438,8 @@ function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
         </div>`;
     }).join('');
 
-    return `<div style="font-family:'Noto Sans KR',sans-serif;background:white;width:297mm;height:210mm;padding:30px;box-sizing:border-box;">
-        <div style="text-align:center;margin-bottom:30px;">
+    return `<div style="font-family:'Noto Sans KR',sans-serif;background:white;width:100%;height:100%;padding:30px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;">
+        <div style="text-align:center;">
             <div style="width:80px;height:80px;background:linear-gradient(135deg,#7c3aed,#4338ca);border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;">
                 <div style="color:white;text-align:center;"><div style="font-size:12px;">사주명가</div><div style="font-size:20px;font-weight:bold;">대운</div></div>
             </div>
@@ -428,7 +447,7 @@ function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
             <p style="color:#6b7280;font-size:18px;margin:12px 0 0;">${customer.name}님의 개인 맞춤 운세 캘린더</p>
         </div>
         
-        <div style="background:#f9fafb;border-radius:12px;padding:20px;margin-bottom:20px;">
+        <div style="background:#f9fafb;border-radius:12px;padding:20px;">
             <h2 style="font-size:16px;font-weight:bold;color:#374151;margin:0 0 12px;">📋 기본 정보</h2>
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
                 <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">생년월일시</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${customer.birth_info}</div></div>
@@ -438,7 +457,7 @@ function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
             </div>
         </div>
         
-        <div style="margin-bottom:20px;">
+        <div>
             <h2 style="font-size:16px;font-weight:bold;color:#374151;margin:0 0 12px;">🔮 사주팔자</h2>
             <div style="display:flex;gap:12px;justify-content:center;">${pillarsHtml}</div>
         </div>
@@ -458,8 +477,8 @@ function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
             </div>` : ''}
         </div>
         
-        <div style="margin-top:20px;padding:14px;background:#f3f4f6;border-radius:10px;font-size:13px;text-align:center;">
-            <div style="margin-bottom:8px;">
+        <div style="padding:14px;background:#f3f4f6;border-radius:10px;font-size:13px;text-align:center;">
+             <div style="margin-bottom:8px;">
                 <strong>길운 표시:</strong> 
                 <span style="margin-left:20px;color:#f59e0b;">★ 대길</span> · 
                 <span style="color:#22c55e;">◎ 길</span> · 
@@ -491,12 +510,12 @@ function generatePDFMonthPage(year, month, monthData, ilgan) {
 
     // 요일 헤더
     let cells = ['일', '월', '화', '수', '목', '금', '토'].map((d, i) =>
-        `<div style="text-align:center;font-size:14px;font-weight:bold;padding:8px;color:${i === 0 ? '#dc2626' : i === 6 ? '#2563eb' : '#374151'};background:#f3f4f6;border-radius:6px;">${d}</div>`
+        `<div style="text-align:center;font-size:14px;font-weight:bold;padding:4px;color:${i === 0 ? '#dc2626' : i === 6 ? '#2563eb' : '#374151'};background:#f3f4f6;border-radius:4px;">${d}</div>`
     ).join('');
 
     // 빈 셀
     for (let i = 0; i < startDayOfWeek; i++) {
-        cells += '<div style="background:#fafafa;min-height:65px;border-radius:6px;"></div>';
+        cells += '<div style="background:#fafafa;min-height:60px;border-radius:4px;"></div>';
     }
 
     // 날짜 셀
@@ -512,42 +531,42 @@ function generatePDFMonthPage(year, month, monthData, ilgan) {
 
         let issueIcons = issues.slice(0, 3).map(i => i.icon).join('');
 
-        cells += `<div style="background:${bgColor};min-height:65px;border-radius:6px;padding:6px;border-left:${leftBorder};">
+        cells += `<div style="background:${bgColor};min-height:60px;border-radius:4px;padding:4px;border-left:${leftBorder};">
             <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-weight:bold;font-size:16px;color:${textColor};">${day}</span>
-                <span style="font-size:14px;">${dayLuck.symbol}</span>
+                <span style="font-weight:bold;font-size:15px;color:${textColor};">${day}</span>
+                <span style="font-size:13px;">${dayLuck.symbol}</span>
             </div>
-            <div style="font-family:'Noto Serif KR',serif;font-size:16px;font-weight:700;color:#374151;margin-top:2px;">${ganji}</div>
+            <div style="font-family:'Noto Serif KR',serif;font-size:15px;font-weight:700;color:#374151;margin-top:2px;">${ganji}</div>
             ${issueIcons ? `<div style="font-size:11px;margin-top:2px;">${issueIcons}</div>` : ''}
         </div>`;
     }
 
-    return `<div style="font-family:'Noto Sans KR',sans-serif;background:white;width:297mm;height:210mm;padding:20px;box-sizing:border-box;">
+    return `<div style="font-family:'Noto Sans KR',sans-serif;background:white;width:100%;height:100%;padding:20px;box-sizing:border-box;display:flex;flex-direction:column;">
         <!-- 월 헤더 -->
-        <div style="background:${headerBg};border-radius:12px;padding:16px 24px;margin-bottom:16px;border-left:5px solid ${borderColor};">
+        <div style="background:${headerBg};border-radius:12px;padding:12px 20px;margin-bottom:12px;border-left:5px solid ${borderColor};flex-shrink:0;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
                 <div>
                     <div style="font-size:13px;color:#6b7280;">${year}년</div>
-                    <div style="font-size:32px;font-weight:800;color:#1f2937;">${month}월</div>
+                    <div style="font-size:28px;font-weight:800;color:#1f2937;">${month}월</div>
                 </div>
                 <div style="text-align:center;">
-                    <div style="font-family:'Noto Serif KR',serif;font-size:44px;font-weight:900;color:#4c1d95;">${monthData.간지}</div>
+                    <div style="font-family:'Noto Serif KR',serif;font-size:36px;font-weight:900;color:#4c1d95;">${monthData.간지}</div>
                     <div style="font-size:13px;color:#6b7280;">${monthData.십성}</div>
                 </div>
                 <div style="text-align:right;">
-                    <div style="font-size:18px;font-weight:bold;color:#7c3aed;">${luckInfo.keyword}</div>
-                    <div style="font-size:13px;color:#6b7280;max-width:180px;">${luckInfo.advice}</div>
+                    <div style="font-size:16px;font-weight:bold;color:#7c3aed;">${luckInfo.keyword}</div>
+                    <div style="font-size:12px;color:#6b7280;max-width:180px;">${luckInfo.advice}</div>
                 </div>
             </div>
         </div>
         
-        <!-- 달력 그리드 -->
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;">
+        <!-- 달력 그리드 (공간 채우기) -->
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;flex-grow:1;">
             ${cells}
         </div>
         
-        <!-- 하단 범례 -->
-        <div style="margin-top:12px;padding:10px;background:#f3f4f6;border-radius:8px;display:flex;justify-content:center;gap:16px;font-size:11px;flex-wrap:wrap;">
+        <!-- 하단 범례 (고정) -->
+        <div style="margin-top:10px;padding:8px;background:#f3f4f6;border-radius:8px;display:flex;justify-content:center;gap:12px;font-size:10px;flex-wrap:wrap;flex-shrink:0;">
             <span>★대길</span><span>◎길</span><span>○평</span><span>△주의</span>
             <span style="margin-left:12px;">💰재물 📈사업 ✈️이동 🤝귀인 📝문서 ⭐인기 📚학습 🤲협력 🔄변화 ⚠️건강주의</span>
         </div>
