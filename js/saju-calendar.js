@@ -476,19 +476,28 @@ function getPillarsInternal(sajuData) {
                 let ganji = p[1] || '';
                 let cheon_sip = p[2] || '-';
                 
-                // 데이터 보정 로직 (예: ["상관 癸", "?", "未"] -> title: "상관", ganji: "癸未")
                 const hanjaRegex = /[\u4E00-\u9FFF]/;
                 const titleHanjaMatch = title.match(hanjaRegex);
                 
-                if (titleHanjaMatch && (ganji === '?' || !ganji)) {
-                    // Title에 한자가 있고 ganji가 유효하지 않으면 Title의 한자를 들고옴
+                // Case 1: ["비견 甲", "?", "戌"]
+                if (titleHanjaMatch && (ganji === '?' || !ganji || ganji.trim() === '')) {
                     let actualGan = titleHanjaMatch[0];
                     let actualJi = (cheon_sip && hanjaRegex.test(cheon_sip)) ? cheon_sip : '';
-                    
                     return {
                         title: title.replace(actualGan, '').trim(),
                         ganji: actualGan + actualJi,
-                        cheon_sip: (actualJi ? '-' : cheon_sip),
+                        cheon_sip: actualJi ? '-' : cheon_sip,
+                        ji_sip: '',
+                        sinsal: '-'
+                    };
+                }
+
+                // Case 2: ["비견", "甲", "戌"] -> ganji가 1글자고 cheon_sip이 한자면 합침
+                if (ganji.length === 1 && cheon_sip.length === 1 && hanjaRegex.test(ganji) && hanjaRegex.test(cheon_sip)) {
+                    return {
+                        title: title,
+                        ganji: ganji + cheon_sip,
+                        cheon_sip: '-',
                         ji_sip: '',
                         sinsal: '-'
                     };
@@ -646,9 +655,15 @@ function getSewunInternal(sajuData) {
     if (sajuData.sewun) {
         if (Array.isArray(sajuData.sewun.data)) return sajuData.sewun;
         if (Array.isArray(sajuData.sewun)) return { data: sajuData.sewun };
+        if (sajuData.sewun.월운) return { data: [sajuData.sewun], ...sajuData.sewun };
+        return sajuData.sewun;
     }
-    // fallback
-    if (Array.isArray(sajuData.sewoon)) return { data: sajuData.sewoon };
+    if (sajuData.sewoon) {
+        if (Array.isArray(sajuData.sewoon.data)) return sajuData.sewoon;
+        if (Array.isArray(sajuData.sewoon)) return { data: sajuData.sewoon };
+        if (sajuData.sewoon.월운) return { data: [sajuData.sewoon], ...sajuData.sewoon };
+        return sajuData.sewoon;
+    }
     return { data: [] };
 }
 

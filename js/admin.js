@@ -388,8 +388,9 @@ async function downloadPreviewPDF() {
         let imgData = canvas.toDataURL('image/jpeg', 0.9); // JPEG 압축
         pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight); // PDF 페이지에 이미지 추가
 
-        // --- 2. 월별 달력
-        if (sewun && sewun.월운) {
+        // --- 2. 월별 달력 생성 (1월~12월) ---
+        const monthlyLuckArray = (sewun && sewun.월운) ? sewun.월운 : sewunData.월운;
+        if (monthlyLuckArray) {
             for (let m = 1; m <= 12; m++) {
                 showToast(`PDF 생성 중... (${m + 1}/${totalPages})`, 'info');
 
@@ -626,9 +627,10 @@ function generateFullCalendarPreview(customer, sajuData, year) {
     }).join('');
 
     let calendarsHtml = '';
-    if (sewun && sewun.월운) {
+    const monthlyLuckArray = (sewun && sewun.월운) ? sewun.월운 : sewunData.월운;
+    if (monthlyLuckArray) {
         for (let m = 1; m <= 12; m++) {
-            let monthData = SajuCalendar.getMonthData(sewun, year, m);
+            let monthData = SajuCalendar.getMonthData(sewun || sewunData, year, m);
             if (monthData) calendarsHtml += generateMonthCalendarHtml(year, m, monthData, sajuData.user_info);
         }
     }
