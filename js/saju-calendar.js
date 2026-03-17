@@ -465,62 +465,57 @@ function generateCalendarData(year, month, ilgan, monthData) {
 function getPillarsInternal(sajuData) {
     if (!sajuData) return [];
 
-    let sourcePillars = [];
+    let rawPillars = [];
     if (Array.isArray(sajuData.pillars)) {
-        sourcePillars = sajuData.pillars;
+        rawPillars = sajuData.pillars;
     } else if (sajuData.pillar && Array.isArray(sajuData.pillar.data)) {
-        sourcePillars = sajuData.pillar.data.map(p => {
-            if (Array.isArray(p)) {
-                // p[0]: title, p[1]: ganji (or gan), p[2]: sipseong (or ji)
-                let title = p[0] || '';
-                let ganji = p[1] || '';
-                let cheon_sip = p[2] || '-';
-                
-                const hanjaRegex = /[\u4E00-\u9FFF]/;
-                const titleHanjaMatch = title.match(hanjaRegex);
-                
-                // Case 1: ["비견 甲", "?", "戌"]
-                if (titleHanjaMatch && (ganji === '?' || !ganji || ganji.trim() === '')) {
-                    let actualGan = titleHanjaMatch[0];
-                    let actualJi = (cheon_sip && hanjaRegex.test(cheon_sip)) ? cheon_sip : '';
-                    return {
-                        title: title.replace(actualGan, '').trim(),
-                        ganji: actualGan + actualJi,
-                        cheon_sip: actualJi ? '-' : cheon_sip,
-                        ji_sip: '',
-                        sinsal: '-'
-                    };
-                }
+        rawPillars = sajuData.pillar.data;
+    } else if (sajuData.pillar_data) {
+        rawPillars = Array.isArray(sajuData.pillar_data) ? sajuData.pillar_data : (sajuData.pillar_data.data || []);
+    } else {
+        rawPillars = sajuData.pillars || [];
+    }
 
-                // Case 2: ["비견", "甲", "戌"] -> ganji가 1글자고 cheon_sip이 한자면 합침
-                let trimGanji = ganji.trim();
-                let trimCheonSip = cheon_sip.trim();
-                if (trimGanji.length === 1 && trimCheonSip.length === 1 && hanjaRegex.test(trimGanji) && hanjaRegex.test(trimCheonSip)) {
-                    return {
-                        title: title,
-                        ganji: trimGanji + trimCheonSip,
-                        cheon_sip: '-',
-                        ji_sip: '',
-                        sinsal: '-'
-                    };
-                }
+    const hanjaRegex = /[\u4E00-\u9FFF]/;
 
+    return rawPillars.map(p => {
+        if (Array.isArray(p)) {
+            let title = p[0] || '';
+            let ganji = p[1] || '';
+            let cheon_sip = p[2] || '-';
+
+            const titleHanjaMatch = title.match(hanjaRegex);
+
+            // Case 1: ["비견 甲", "?", "戌"]
+            if (titleHanjaMatch && (ganji === '?' || !ganji || ganji.trim() === '')) {
+                let actualGan = titleHanjaMatch[0];
+                let actualJi = (cheon_sip && hanjaRegex.test(cheon_sip)) ? cheon_sip : '';
                 return {
-                    title: title,
-                    ganji: ganji,
-                    cheon_sip: cheon_sip,
+                    title: title.replace(actualGan, '').trim(),
+                    ganji: actualGan + actualJi,
+                    cheon_sip: actualJi ? '-' : cheon_sip,
                     ji_sip: '',
                     sinsal: '-'
                 };
             }
-            return p;
-        });
-    } else {
-        sourcePillars = sajuData.pillars || [];
-    }
 
-    // 결과값 반환 (원본 보존을 위해 새 배열 반환)
-    return [...sourcePillars];
+            // Case 2: ["비견", "甲", "戌"]
+            let trimGanji = String(ganji).trim();
+            let trimCheonSip = String(cheon_sip).trim();
+            if (trimGanji.length === 1 && trimCheonSip.length === 1 && hanjaRegex.test(trimGanji) && hanjaRegex.test(trimCheonSip)) {
+                return {
+                    title: title,
+                    ganji: trimGanji + trimCheonSip,
+                    cheon_sip: '-',
+                    ji_sip: '',
+                    sinsal: '-'
+                };
+            }
+
+            return { title, ganji, cheon_sip, ji_sip: '', sinsal: '-' };
+        }
+        return p;
+    });
 }
 
 /**
@@ -640,33 +635,56 @@ function getIlganInternal(sajuData) {
  */
 function getDaeunInternal(sajuData) {
     if (!sajuData) return { data: [] };
+    let res = { data: [] };
+    
+    // 1. daeun 체크
     if (sajuData.daeun) {
-        if (Array.isArray(sajuData.daeun.data)) return sajuData.daeun;
-        if (Array.isArray(sajuData.daeun)) return { data: sajuData.daeun, direction: sajuData.daeun_direction || sajuData.direction };
+        if (Array.isArray(sajuData.daeun.data)) res = { ...sajuData.daeun };
+        else if (Array.isArray(sajuData.daeun)) res = { data: sajuData.daeun };
+        else res = { ...sajuData.daeun };
+    } 
+    
+    // 2. daewun 체크 (daeun이 없거나 데이터가 비었을 때)
+    if ((!res.data || res.data.length === 0) && (sajuData.daewun || sajuData.daewoon)) {
+        let d = sajuData.daewun || sajuData.daewoon;
+        if (Array.isArray(d)) res.data = d;
+        else if (d.data) res = { ...d };
     }
-    // fallback
-    if (Array.isArray(sajuData.daewun)) return { data: sajuData.daewun };
-    return { data: [] };
+
+    // 3. direction 보정 (top-level에 있는 경우)
+    if (!res.direction) {
+        res.direction = sajuData.daeun_direction || sajuData.daewun_direction || 
+                        sajuData.direction || (sajuData.daeun && sajuData.daeun.direction);
+    }
+    
+    return res;
 }
 
-/**
- * 사주 데이터에서 세운(Sewun) 배열 추출
- */
 function getSewunInternal(sajuData) {
     if (!sajuData) return { data: [] };
+    let res = { data: [] };
+
     if (sajuData.sewun) {
-        if (Array.isArray(sajuData.sewun.data)) return sajuData.sewun;
-        if (Array.isArray(sajuData.sewun)) return { data: sajuData.sewun };
-        if (sajuData.sewun.월운) return { data: [sajuData.sewun], ...sajuData.sewun };
-        return sajuData.sewun;
+        if (Array.isArray(sajuData.sewun.data)) res = { ...sajuData.sewun };
+        else if (Array.isArray(sajuData.sewun)) res = { data: sajuData.sewun };
+        else res = { ...sajuData.sewun, data: [sajuData.sewun] };
+    } else if (sajuData.sewoon) {
+        if (Array.isArray(sajuData.sewoon.data)) res = { ...sajuData.sewoon };
+        else if (Array.isArray(sajuData.sewoon)) res = { data: sajuData.sewoon };
+        else res = { ...sajuData.sewoon, data: [sajuData.sewoon] };
     }
-    if (sajuData.sewoon) {
-        if (Array.isArray(sajuData.sewoon.data)) return sajuData.sewoon;
-        if (Array.isArray(sajuData.sewoon)) return { data: sajuData.sewoon };
-        if (sajuData.sewoon.월운) return { data: [sajuData.sewoon], ...sajuData.sewoon };
-        return sajuData.sewoon;
+
+    // 연도 검색용 데이터 보강
+    if (!res.data || res.data.length === 0) {
+        if (sajuData.sewun_data) res.data = sajuData.sewun_data;
     }
-    return { data: [] };
+    
+    // 월운 데이터 보강 (top level sewun/sewoon에 월운만 있는 경우)
+    if (!res.월운) {
+        res.월운 = (sajuData.sewun && sajuData.sewun.월운) || (sajuData.sewoon && sajuData.sewoon.월운);
+    }
+    
+    return res;
 }
 
 // 모듈 내보내기 (전역 사용)
