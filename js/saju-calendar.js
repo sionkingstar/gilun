@@ -493,10 +493,12 @@ function getPillarsInternal(sajuData) {
                 }
 
                 // Case 2: ["비견", "甲", "戌"] -> ganji가 1글자고 cheon_sip이 한자면 합침
-                if (ganji.length === 1 && cheon_sip.length === 1 && hanjaRegex.test(ganji) && hanjaRegex.test(cheon_sip)) {
+                let trimGanji = ganji.trim();
+                let trimCheonSip = cheon_sip.trim();
+                if (trimGanji.length === 1 && trimCheonSip.length === 1 && hanjaRegex.test(trimGanji) && hanjaRegex.test(trimCheonSip)) {
                     return {
                         title: title,
-                        ganji: ganji + cheon_sip,
+                        ganji: trimGanji + trimCheonSip,
                         cheon_sip: '-',
                         ji_sip: '',
                         sinsal: '-'
