@@ -371,7 +371,7 @@ async function downloadPreviewPDF() {
 
         // --- 1. 표지 생성 ---
         showToast(`PDF 생성 중... (1/${totalPages})`, 'info');
-        container.innerHTML = generatePDFCoverPage(customer, sajuData, FIXED_YEAR, currentDaeun, sewun);
+        container.innerHTML = generatePDFCoverPage(customer, sajuData, FIXED_YEAR, currentDaeun, sewun, daeunData);
         await new Promise(r => setTimeout(r, 500)); // 렌더링 안정화 대기
 
         let canvas = await html2canvas(container, {
@@ -432,7 +432,7 @@ async function downloadPreviewPDF() {
 }
 
 // PDF 표지 페이지 HTML
-function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
+function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun, daeunData) {
     const pillars = SajuCalendar.correctPillars(sajuData, customer.birth_info);
 
     const pillarsHtml = pillars.map(p => {

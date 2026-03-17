@@ -471,10 +471,33 @@ function getPillarsInternal(sajuData) {
     } else if (sajuData.pillar && Array.isArray(sajuData.pillar.data)) {
         sourcePillars = sajuData.pillar.data.map(p => {
             if (Array.isArray(p)) {
+                // p[0]: title, p[1]: ganji (or gan), p[2]: sipseong (or ji)
+                let title = p[0] || '';
+                let ganji = p[1] || '';
+                let cheon_sip = p[2] || '-';
+                
+                // 데이터 보정 로직 (예: ["상관 癸", "?", "未"] -> title: "상관", ganji: "癸未")
+                const hanjaRegex = /[\u4E00-\u9FFF]/;
+                const titleHanjaMatch = title.match(hanjaRegex);
+                
+                if (titleHanjaMatch && (ganji === '?' || !ganji)) {
+                    // Title에 한자가 있고 ganji가 유효하지 않으면 Title의 한자를 들고옴
+                    let actualGan = titleHanjaMatch[0];
+                    let actualJi = (cheon_sip && hanjaRegex.test(cheon_sip)) ? cheon_sip : '';
+                    
+                    return {
+                        title: title.replace(actualGan, '').trim(),
+                        ganji: actualGan + actualJi,
+                        cheon_sip: (actualJi ? '-' : cheon_sip),
+                        ji_sip: '',
+                        sinsal: '-'
+                    };
+                }
+
                 return {
-                    title: p[0],
-                    ganji: p[1],
-                    cheon_sip: p[2] || '-',
+                    title: title,
+                    ganji: ganji,
+                    cheon_sip: cheon_sip,
                     ji_sip: '',
                     sinsal: '-'
                 };
