@@ -40,9 +40,9 @@ function getLunarDate(year, month, day) {
 }
 
 // ========== 일진 계산 ==========
-// 기준일: 2026년 1월 1일 = 甲戌(갑술) - 60갑자 중 10번째 (인덱스 10)
+// 기준일: 2026년 1월 1일 = 乙亥(을해) - 60갑자 중 11번째 (인덱스 11)
 const BASE_DATE = new Date(2026, 0, 1);
-const BASE_GANJI_INDEX = 10; // 甲戌
+const BASE_GANJI_INDEX = 11; // 乙亥
 
 /**
  * 특정 날짜의 일진(간지) 계산
@@ -459,6 +459,176 @@ function generateCalendarData(year, month, ilgan, monthData) {
     return calendar;
 }
 
+/**
+ * 사주 데이터에서 기둥(Pillars) 배열 추출 (전역 유틸리티)
+ */
+function getPillarsInternal(sajuData) {
+    if (!sajuData) return [];
+
+    let sourcePillars = [];
+    if (Array.isArray(sajuData.pillars)) {
+        sourcePillars = sajuData.pillars;
+    } else if (sajuData.pillar && Array.isArray(sajuData.pillar.data)) {
+        sourcePillars = sajuData.pillar.data.map(p => {
+            if (Array.isArray(p)) {
+                return {
+                    title: p[0],
+                    ganji: p[1],
+                    cheon_sip: p[2] || '-',
+                    ji_sip: '',
+                    sinsal: '-'
+                };
+            }
+            return p;
+        });
+    } else {
+        sourcePillars = sajuData.pillars || [];
+    }
+
+    // 결과값 반환 (원본 보존을 위해 새 배열 반환)
+    return [...sourcePillars];
+}
+
+/**
+ * 시주(Time Pillar) 계산 및 교정 (전역 유틸리티)
+ */
+function correctPillars(sajuData, birthInfo) {
+    const pillars = getPillarsInternal(sajuData);
+    if (!pillars || pillars.length === 0) return pillars;
+
+    try {
+        const timeMatch = String(birthInfo || '').match(/(\d{1,2}):(\d{2})/);
+        const ilganChar = getIlganInternal(sajuData);
+
+        if (timeMatch && ilganChar) {
+            const sijuPillar = pillars.find(p => p.title && p.title.includes('시'));
+            if (sijuPillar) {
+                let hour = parseInt(timeMatch[1]);
+                let minute = parseInt(timeMatch[2]);
+                if (hour >= 24) hour = hour % 24;
+
+                let adjustedMinutes = (hour * 60 + minute + 30) % 1440;
+                let jijiIndex = Math.floor(adjustedMinutes / 120);
+
+                const JIJIS = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
+                const CHEONGANS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
+                const ilganIndex = CHEONGANS.indexOf(ilganChar);
+
+                if (ilganIndex !== -1) {
+                    const startStemIndex = [0, 2, 4, 6, 8, 0, 2, 4, 6, 8][ilganIndex];
+                    let siganIndex = (startStemIndex + jijiIndex) % 10;
+                    let sigan = CHEONGANS[siganIndex];
+                    const calculatedGanji = sigan + JIJIS[jijiIndex];
+
+                    // 무조건 계산된 값으로 교정
+                    if (sijuPillar.ganji !== calculatedGanji) {
+                        sijuPillar.ganji = calculatedGanji;
+
+                        // 십성(Sipseong) 정보도 업데이트
+                        const SIPSEONGS = {
+                            0: ['비견', '겁재', '식신', '상관', '편재', '정재', '편관', '정관', '편인', '정인'], // 甲
+                            1: ['겁재', '비견', '상관', '식신', '정재', '편재', '정관', '편관', '정인', '편인'], // 乙
+                            2: ['편인', '정인', '비견', '겁재', '식신', '상관', '편재', '정재', '편관', '정관'], // 丙
+                            3: ['정인', '편인', '겁재', '비견', '상관', '식신', '정재', '편재', '정관', '편관'], // 丁
+                            4: ['편관', '정관', '편인', '정인', '비견', '겁재', '식신', '상관', '편재', '정재'], // 戊
+                            5: ['정관', '편관', '정인', '편인', '겁재', '비견', '상관', '식신', '정재', '편재'], // 己
+                            6: ['편재', '정재', '편관', '정관', '편인', '정인', '비견', '겁재', '식신', '상관'], // 庚
+                            7: ['정재', '편재', '정관', '편관', '정인', '편인', '겁재', '비견', '상관', '식신'], // 辛
+                            8: ['식신', '상관', '편재', '정재', '편관', '정관', '편인', '정인', '비견', '겁재'], // 壬
+                            9: ['상관', '식신', '정재', '편재', '정관', '편관', '정인', '편인', '겁재', '비견']  // 癸
+                        };
+                        const dayGanIndex = ilganIndex;
+                        const timeGanIndex = siganIndex;
+                        // 육친(십성) 계산: 일간 기준 시주의 천간 관계
+                        if (SIPSEONGS[dayGanIndex]) {
+                            sijuPillar.cheon_sip = SIPSEONGS[dayGanIndex][timeGanIndex];
+                        }
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Siju correction error:", e);
+    }
+    return pillars;
+}
+
+/**
+ * 양력 월에 해당하는 사주 월운 데이터 추출 (전역 유틸리티)
+ */
+function getMonthData(sewun, year, month) {
+    if (!sewun || !sewun.월운) return null;
+
+    // 2026년 1월 예외 (기축월)
+    if (year === 2026 && month === 1) {
+        return { 월: '1월', 간지: '己丑', 십성: '비견/비견', 신살: '-', luck: 'normal' };
+    }
+
+    // 표준 매핑: 양력 m월 = 사주 (m-1)월
+    const sajuMonthLabel = `${month - 1}월`;
+    if (!Array.isArray(sewun.월운)) return null;
+    return sewun.월운.find(x => x.월 === sajuMonthLabel) || null;
+}
+
+/**
+ * 사주 데이터에서 일간(본인) 추출 (전역 유틸리티)
+ */
+function getIlganInternal(sajuData) {
+    if (!sajuData) return '丙';
+
+    // 1. pillars에서 '일주'나 '일'이 들어간 기둥 먼저 찾기
+    let sourcePillars = [];
+    if (Array.isArray(sajuData.pillars)) sourcePillars = sajuData.pillars;
+    else if (sajuData.pillar && Array.isArray(sajuData.pillar.data)) sourcePillars = sajuData.pillar.data;
+
+    const iljuPillar = sourcePillars.find(p => {
+        const title = Array.isArray(p) ? p[0] : (p.title || '');
+        return title.includes('일') || title.includes('본인');
+    });
+
+    if (iljuPillar) {
+        const ganji = Array.isArray(iljuPillar) ? iljuPillar[1] : iljuPillar.ganji;
+        if (ganji && ganji.length >= 1) return ganji.trim().charAt(0);
+    }
+
+    // 2. fallback으로 user_info 체크
+    const ui = sajuData.user_info || {};
+    const ilganValue = ui['일간(본인)'] || ui['일주'] || ui['일간'] || ui['본인'] || sajuData.ilgan || sajuData.ilju;
+    if (ilganValue && typeof ilganValue === 'string') {
+        return ilganValue.trim().charAt(0);
+    }
+
+    return '丙'; // 최후의 기본값
+}
+
+/**
+ * 사주 데이터에서 대운(Daeun) 배열 추출
+ */
+function getDaeunInternal(sajuData) {
+    if (!sajuData) return { data: [] };
+    if (sajuData.daeun) {
+        if (Array.isArray(sajuData.daeun.data)) return sajuData.daeun;
+        if (Array.isArray(sajuData.daeun)) return { data: sajuData.daeun, direction: sajuData.daeun_direction || sajuData.direction };
+    }
+    // fallback
+    if (Array.isArray(sajuData.daewun)) return { data: sajuData.daewun };
+    return { data: [] };
+}
+
+/**
+ * 사주 데이터에서 세운(Sewun) 배열 추출
+ */
+function getSewunInternal(sajuData) {
+    if (!sajuData) return { data: [] };
+    if (sajuData.sewun) {
+        if (Array.isArray(sajuData.sewun.data)) return sajuData.sewun;
+        if (Array.isArray(sajuData.sewun)) return { data: sajuData.sewun };
+    }
+    // fallback
+    if (Array.isArray(sajuData.sewoon)) return { data: sajuData.sewoon };
+    return { data: [] };
+}
+
 // 모듈 내보내기 (전역 사용)
 window.SajuCalendar = {
     getLunarDate,
@@ -468,6 +638,12 @@ window.SajuCalendar = {
     calculateDailyLuck,
     generateMonthSummary,
     generateCalendarData,
+    getIlgan: getIlganInternal,
+    getPillars: getPillarsInternal,
+    getDaeun: getDaeunInternal,
+    getSewun: getSewunInternal,
+    correctPillars,
+    getMonthData,
     CHEONGAN,
     JIJI,
     GANJI_60,

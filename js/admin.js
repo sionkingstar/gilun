@@ -325,7 +325,7 @@ function openPreviewModal(customerId) {
         document.getElementById('previewModal').classList.remove('hidden');
     } catch (error) {
         console.error('Preview error:', error);
-        showToast('사주 데이터 형식 오류', 'error');
+        showToast('데이터 형식 오류: ' + error.message, 'error');
     }
 }
 
@@ -343,12 +343,13 @@ async function downloadPreviewPDF() {
 
     try {
         const sajuData = JSON.parse(customer.saju_data);
-        const userInfo = sajuData.user_info;
-        const pillars = sajuData.pillars;
-        const daeun = sajuData.daeun;
-        const sewun = sajuData.sewun.data.find(s => s.연도 === FIXED_YEAR);
-        const currentDaeun = daeun.data.find(d => d.연도 <= FIXED_YEAR && d.연도 + 10 > FIXED_YEAR);
-        const ilgan = userInfo['일주'] ? userInfo['일주'].charAt(0) : '丙';
+        const pillars = SajuCalendar.correctPillars(sajuData, customer.birth_info);
+        const daeunData = SajuCalendar.getDaeun(sajuData);
+        const sewunData = SajuCalendar.getSewun(sajuData);
+        
+        const sewun = (sewunData.data || []).find(s => s.연도 === FIXED_YEAR);
+        const currentDaeun = (daeunData.data || []).find(d => d.연도 <= FIXED_YEAR && d.연도 + 10 > FIXED_YEAR);
+        const ilgan = SajuCalendar.getIlgan(sajuData);
 
         // jsPDF 초기화 (가로 A4)
         const { jsPDF } = window.jspdf;
@@ -392,23 +393,7 @@ async function downloadPreviewPDF() {
             for (let m = 1; m <= 12; m++) {
                 showToast(`PDF 생성 중... (${m + 1}/${totalPages})`, 'info');
 
-                let monthData;
-
-                // 2026년 1월 예외 처리 (기축월)
-                if (m === 1 && FIXED_YEAR === 2026) {
-                    monthData = {
-                        월: '1월',
-                        간지: '己丑', // 기축
-                        십성: '비견/비견', // 임시 평운
-                        신살: '-',
-                        luck: 'normal'
-                    };
-                } else {
-                    // 그 외: 양력 m월 -> 사주 (m-1)월 데이터 매핑
-                    // 예: 2월 -> 1월(경인), 3월 -> 2월(신묘)...
-                    const sajuMonthNum = m - 1;
-                    monthData = sewun.월운.find(x => x.월 === `${sajuMonthNum}월`);
-                }
+                let monthData = SajuCalendar.getMonthData(sewun, FIXED_YEAR, m);
 
                 if (monthData) {
                     pdf.addPage();
@@ -448,77 +433,13 @@ async function downloadPreviewPDF() {
 
 // PDF 표지 페이지 HTML
 function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
-    const userInfo = sajuData.user_info;
-    const pillars = sajuData.pillars;
-    const daeun = sajuData.daeun || {};
-
-    // --- 시주 재계산 로직 시작 ---
-    try {
-        const timeMatch = customer.birth_info.match(/(\d{1,2}):(\d{2})/);
-        const ilganChar = userInfo['일주'] ? userInfo['일주'].charAt(0) : '';
-
-        if (timeMatch && ilganChar) {
-            let hour = parseInt(timeMatch[1]);
-            let minute = parseInt(timeMatch[2]);
-
-            // 24시간제 보정 (혹시 모를 오류 방지)
-            if (hour >= 24) hour = hour % 24;
-
-            // 1. 시지(Time Branch) 계산
-            // 23:30 ~ 01:29 = 자시, 01:30 ~ 03:29 = 축시 ...
-            // 시간을 분으로 환산하여 계산
-            let totalMinutes = hour * 60 + minute;
-            // 자시 시작(23:30)을 기준점 0으로 맞추기 위해 30분 더함 (24시간 = 1440분)
-            // (Total + 30) % 1440 / 120(2시간)
-            let adjustedMinutes = (totalMinutes + 30) % 1440;
-            let jijiIndex = Math.floor(adjustedMinutes / 120);
-
-            // JIJI 배열: ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥']
-            // jijiIndex 0 = 자시, 1 = 축시 ...
-            const JIJIS = ['子', '丑', '寅', '卯', '辰', '巳', '午', '未', '申', '酉', '戌', '亥'];
-            let siji = JIJIS[jijiIndex];
-
-            // 2. 시간(Time Stem) 계산 (시두법)
-            const CHEONGANS = ['甲', '乙', '丙', '丁', '戊', '己', '庚', '辛', '壬', '癸'];
-            let startStemIndex = 0;
-
-            // 일간에 따른 자시의 천간 시작점
-            // 甲(0), 己(5) -> 甲(0)
-            // 乙(1), 庚(6) -> 丙(2)
-            // 丙(2), 辛(7) -> 戊(4)
-            // 丁(3), 壬(8) -> 庚(6)
-            // 戊(4), 癸(9) -> 壬(8)
-            const ilganIndex = CHEONGANS.indexOf(ilganChar);
-            if (ilganIndex !== -1) {
-                const mod = ilganIndex % 5;
-                if (mod === 0) startStemIndex = 0; // 갑기
-                else if (mod === 1) startStemIndex = 2; // 을경
-                else if (mod === 2) startStemIndex = 4; // 병신
-                else if (mod === 3) startStemIndex = 6; // 정임
-                else if (mod === 4) startStemIndex = 8; // 무계
-
-                let siganIndex = (startStemIndex + jijiIndex) % 10;
-                let sigan = CHEONGANS[siganIndex];
-
-                // 3. Pillars 데이터 업데이트
-                const sijuPillar = pillars.find(p => p.title && p.title.includes('시'));
-                if (sijuPillar) {
-                    // console.log(`시주 보정: ${sijuPillar.ganji} -> ${sigan}${siji}`);
-                    sijuPillar.ganji = sigan + siji;
-                    // 십성은 복잡하므로 여기서는 간지만 수정 (화면 표시 목적)
-                }
-            }
-        }
-    } catch (e) {
-        console.error("시주 재계산 중 오류:", e);
-    }
-    // --- 시주 재계산 로직 끝 ---
+    const pillars = SajuCalendar.correctPillars(sajuData, customer.birth_info);
 
     const pillarsHtml = pillars.map(p => {
         const title = p.title || '';
         const name = title.split(' ')[0] || '';
         const ganji = p.ganji || '??';
-        const sipseong = (p.cheon_sip || '') + '/' + (p.ji_sip || '');
+        const sipseong = (p.cheon_sip || p.sipseong || '') + (p.ji_sip ? '/' + p.ji_sip : '');
 
         return `<div style="background:linear-gradient(180deg,#1e1b4b,#312e81);border-radius:12px;padding:16px;text-align:center;color:white;min-width:90px;">
             <div style="font-size:12px;color:#c4b5fd;margin-bottom:6px;">${name}</div>
@@ -542,9 +463,9 @@ function generatePDFCoverPage(customer, sajuData, year, currentDaeun, sewun) {
             <h2 style="font-size:16px;font-weight:bold;color:#374151;margin:0 0 12px;">📋 기본 정보</h2>
             <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
                 <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">생년월일시</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${customer.birth_info}</div></div>
-                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">일간(본인)</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${userInfo['일주'].charAt(0)}</div></div>
+                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">일간(본인)</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${SajuCalendar.getIlgan(sajuData)}</div></div>
                 <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">성별</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${customer.gender}</div></div>
-                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">대운방향</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${daeun && daeun.direction ? daeun.direction : '-'}</div></div>
+                <div style="background:white;padding:12px;border-radius:8px;"><div style="font-size:12px;color:#6b7280;">대운방향</div><div style="font-size:16px;font-weight:bold;margin-top:4px;">${daeunData.direction || '-'}</div></div>
             </div>
         </div>
         
@@ -622,13 +543,13 @@ function generatePDFMonthPage(year, month, monthData, ilgan) {
 
         let issueIcons = issues.slice(0, 3).map(i => i.icon).join('');
 
-        cells += `<div style="background:${bgColor};min-height:55px;border-radius:4px;padding:4px;border-left:${leftBorder};">
+        cells += `<div style="background:${bgColor};min-height:55px;border-radius:4px;padding:4px;border-left:${leftBorder};display:flex;flex-direction:column;justify-content:space-between;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
                 <span style="font-weight:bold;font-size:15px;color:${textColor};">${day}</span>
                 <span style="font-size:13px;">${dayLuck.symbol}</span>
             </div>
-            <div style="font-family:'Noto Serif KR',serif;font-size:15px;font-weight:700;color:#374151;margin-top:2px;">${ganji}</div>
-            ${issueIcons ? `<div style="font-size:11px;margin-top:2px;">${issueIcons}</div>` : ''}
+            <div style="font-family:'Noto Serif KR',serif;font-size:15px;font-weight:700;color:#374151;text-align:center;">${ganji}</div>
+            <div style="font-size:11px;text-align:right;height:14px;">${issueIcons}</div>
         </div>`;
     }
 
@@ -682,31 +603,33 @@ function getLuckLabel(luck) {
 }
 
 function generateFullCalendarPreview(customer, sajuData, year) {
-    const userInfo = sajuData.user_info;
-    const pillars = sajuData.pillars;
-    const daeun = sajuData.daeun;
-    const sewun = sajuData.sewun.data.find(s => s.연도 === year);
-    const currentDaeun = daeun.data.find(d => d.연도 <= year && d.연도 + 10 > year);
+    const pillars = SajuCalendar.correctPillars(sajuData, customer.birth_info);
+    const daeunData = SajuCalendar.getDaeun(sajuData);
+    const sewunData = SajuCalendar.getSewun(sajuData);
+    
+    const sewun = (sewunData.data || []).find(s => s.연도 === year);
+    const currentDaeun = (daeunData.data || []).find(d => d.연도 <= year && d.연도 + 10 > year);
+    const ilgan = SajuCalendar.getIlgan(sajuData);
 
-    // 새 구조에 맞게 매핑
     const pillarsHtml = pillars.map(p => {
-        const name = p.title.split(' ')[0]; // "시주"
-        const ganji = p.ganji; // "戊辰"
-        const sipseong = p.cheon_sip + '/' + p.ji_sip; // "겁재/겁재"
+        const title = p.title || '';
+        const name = title.split(' ')[0] || '';
+        const ganji = p.ganji || '??';
+        const sipseong = (p.cheon_sip || p.sipseong || '-') + (p.ji_sip ? '/' + p.ji_sip : '');
 
         return `<div class="pillar-box text-center text-white" style="min-width:70px;">
             <div class="text-xs text-purple-300 mb-1">${name}</div>
-            <div class="font-serif text-2xl font-black">${ganji[0]}</div>
-            <div class="font-serif text-2xl font-black">${ganji[1]}</div>
+            <div class="font-serif text-2xl font-black">${ganji[0] || '?'}</div>
+            <div class="font-serif text-2xl font-black">${ganji[1] || '?'}</div>
             <div class="text-xs text-purple-300 mt-1">${sipseong.split('/')[0]}</div>
         </div>`;
-    }).join(''); // 새 데이터는 시주부터 시작하므로 reverse 없이 그대로 쓰면 시주가 왼쪽
+    }).join('');
 
     let calendarsHtml = '';
     if (sewun && sewun.월운) {
         for (let m = 1; m <= 12; m++) {
-            const monthData = sewun.월운.find(x => x.월 === `${m}월`);
-            if (monthData) calendarsHtml += generateMonthCalendarHtml(year, m, monthData, userInfo);
+            let monthData = SajuCalendar.getMonthData(sewun, year, m);
+            if (monthData) calendarsHtml += generateMonthCalendarHtml(year, m, monthData, sajuData.user_info);
         }
     }
 
@@ -729,9 +652,9 @@ function generateFullCalendarPreview(customer, sajuData, year) {
                     <h3 class="text-sm font-bold text-gray-600 mb-3">기본 정보</h3>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                         <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">생년월일시</div><div class="font-medium">${customer.birth_info || '-'}</div></div>
-                        <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">일간</div><div class="font-medium">${userInfo['일주'].charAt(0)}</div></div>
+                        <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">일간</div><div class="font-medium">${SajuCalendar.getIlgan(sajuData)}</div></div>
                         <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">성별</div><div class="font-medium">${customer.gender}</div></div>
-                        <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">대운방향</div><div class="font-medium">${daeun.direction}</div></div>
+                        <div class="bg-gray-50 p-3 rounded-lg"><div class="text-gray-500">대운방향</div><div class="font-medium">${daeunData.direction || '-'}</div></div>
                     </div>
                     ${currentDaeun ? `<div class="mt-4 bg-purple-50 p-4 rounded-lg flex justify-between items-center">
                         <div><span class="text-purple-700 font-bold">현재 대운</span><span class="text-gray-500 text-sm ml-2">(${currentDaeun.연도}~${currentDaeun.연도 + 9})</span></div>
@@ -766,7 +689,7 @@ function generateMonthCalendarHtml(year, month, monthData, userInfo) {
     const lastDay = new Date(year, month, 0);
     const startDayOfWeek = firstDay.getDay();
     const totalDays = lastDay.getDate();
-    const ilgan = userInfo['일주'] ? userInfo['일주'].charAt(0) : '丙';
+    const ilgan = SajuCalendar.getIlgan({ user_info: userInfo }); // partial sajuData
 
     let cells = '';
     for (let i = 0; i < startDayOfWeek; i++) cells += '<div class="calendar-cell empty"></div>';
@@ -807,210 +730,4 @@ function generateMonthCalendarHtml(year, month, monthData, userInfo) {
     </div>`;
 }
 
-function generatePDFContent(customer, sajuData, year) {
-    const userInfo = sajuData.user_info;
-    const pillar = sajuData.pillar;
-    const daeun = sajuData.daeun;
-    const sewun = sajuData.sewun.data.find(s => s.연도 === year);
-    const currentDaeun = daeun.data.find(d => d.연도 <= year && d.연도 + 10 > year);
-
-    const pillarsHtml = [...pillar.data].reverse().map(p => {
-        const [name, ganji, sipseong] = p;
-        return `<div style="background:linear-gradient(180deg,#1e1b4b,#312e81);border-radius:12px;padding:16px;text-align:center;color:white;min-width:80px;">
-            <div style="font-size:12px;color:#c4b5fd;margin-bottom:6px;">${name}</div>
-            <div style="font-family:'Noto Serif KR',serif;font-size:36px;font-weight:900;">${ganji[0]}</div>
-            <div style="font-family:'Noto Serif KR',serif;font-size:36px;font-weight:900;">${ganji[1]}</div>
-            <div style="font-size:11px;color:#c4b5fd;margin-top:6px;">${sipseong.split('/')[0]}</div>
-        </div>`;
-    }).join('');
-
-    const monthsHtml = sewun ? sewun.월운.map(month => {
-        const mainSipseong = month.십성.split('/')[0];
-        const luckInfo = sipseongMeaning[mainSipseong] || { luck: 'normal', keyword: '-' };
-        let bgColor = luckInfo.luck === 'great' ? '#fef3c7' : luckInfo.luck === 'good' ? '#dcfce7' : luckInfo.luck === 'caution' ? '#fee2e2' : '#f3f4f6';
-        let borderColor = luckInfo.luck === 'great' ? '#f59e0b' : luckInfo.luck === 'good' ? '#22c55e' : luckInfo.luck === 'caution' ? '#ef4444' : '#9ca3af';
-        return `<div style="background:${bgColor};border-radius:8px;padding:12px;margin-bottom:8px;border-left:4px solid ${borderColor};">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <span style="font-weight:bold;font-size:16px;">${month.월}</span>
-                <span style="font-family:'Noto Serif KR',serif;font-size:18px;font-weight:bold;">${month.간지}</span>
-                <span style="font-size:14px;">${getLuckLabel(luckInfo.luck)}</span>
-            </div>
-            <div style="font-size:13px;color:#6b7280;"><span style="color:#7c3aed;font-weight:600;">${luckInfo.keyword}</span> · ${month.십성}</div>
-        </div>`;
-    }).join('') : '';
-
-    let monthCalendarsHtml = '';
-    if (sewun && sewun.월운) {
-        const ilgan = userInfo['일간(본인)'] ? userInfo['일간(본인)'].charAt(0) : '丙';
-        for (let m = 1; m <= 12; m++) {
-            const monthData = sewun.월운.find(x => x.월 === `${m}월`);
-            if (monthData) {
-                monthCalendarsHtml += `<div class="pdf-page-break" style="padding:30px;min-height:180mm;">
-                    ${generatePDFMonthCalendarFull(year, m, monthData, ilgan, customer.name)}
-                </div>`;
-            }
-        }
-    }
-
-    return `<div style="font-family:'Noto Sans KR',sans-serif;background:white;">
-        <div style="padding:40px;min-height:180mm;">
-            <div style="text-align:center;margin-bottom:40px;">
-                <div style="width:100px;height:100px;background:linear-gradient(135deg,#7c3aed,#4338ca);border-radius:50%;margin:0 auto 20px;display:flex;align-items:center;justify-content:center;">
-                    <div style="color:white;text-align:center;"><div style="font-size:14px;">사주명가</div><div style="font-size:24px;font-weight:bold;">대운</div></div>
-                </div>
-                <h1 style="font-size:42px;font-weight:800;color:#1f2937;margin:0;">${year}년 길운 달력</h1>
-                <p style="color:#6b7280;font-size:20px;margin:16px 0 0;">${customer.name}님의 개인 맞춤 운세 캘린더</p>
-            </div>
-            <div style="background:#f9fafb;border-radius:16px;padding:24px;margin-bottom:30px;">
-                <h2 style="font-size:18px;font-weight:bold;color:#374151;margin:0 0 16px;">📋 기본 정보</h2>
-                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
-                    <div style="background:white;padding:16px;border-radius:12px;"><div style="font-size:13px;color:#6b7280;">생년월일시</div><div style="font-size:18px;font-weight:bold;margin-top:4px;">${userInfo['입력정보']}</div></div>
-                    <div style="background:white;padding:16px;border-radius:12px;"><div style="font-size:13px;color:#6b7280;">일간(본인)</div><div style="font-size:18px;font-weight:bold;margin-top:4px;">${userInfo['일간(본인)']}</div></div>
-                    <div style="background:white;padding:16px;border-radius:12px;"><div style="font-size:13px;color:#6b7280;">성별</div><div style="font-size:18px;font-weight:bold;margin-top:4px;">${userInfo['성별']}</div></div>
-                    <div style="background:white;padding:16px;border-radius:12px;"><div style="font-size:13px;color:#6b7280;">대운방향</div><div style="font-size:18px;font-weight:bold;margin-top:4px;">${userInfo['대운방향']}</div></div>
-                </div>
-            </div>
-            <div style="margin-bottom:30px;"><h2 style="font-size:18px;font-weight:bold;color:#374151;margin:0 0 16px;">🔮 사주팔자</h2><div style="display:flex;gap:12px;justify-content:center;">${pillarsHtml}</div></div>
-            ${currentDaeun ? `<div style="background:linear-gradient(135deg,#ede9fe,#e0e7ff);border-radius:16px;padding:24px;margin-bottom:30px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <div><h2 style="font-size:18px;font-weight:bold;color:#5b21b6;margin:0 0 8px;">⭐ 현재 대운 (${currentDaeun.연도}~${currentDaeun.연도 + 9})</h2><div style="font-size:14px;color:#6b7280;">십성: ${currentDaeun.십성} · 신살: ${currentDaeun.신살}</div></div>
-                    <span style="font-family:'Noto Serif KR',serif;font-size:48px;font-weight:900;color:#4c1d95;">${currentDaeun.간지}</span>
-                </div>
-            </div>` : ''}
-            ${sewun ? `<div style="background:#f9fafb;border-radius:16px;padding:24px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <div><h2 style="font-size:18px;font-weight:bold;color:#374151;margin:0 0 8px;">📅 ${year}년 세운</h2><div style="font-size:14px;color:#6b7280;">세운십성: ${sewun.세운십성} · 신살: ${sewun.세운신살 || '-'}</div></div>
-                    <span style="font-family:'Noto Serif KR',serif;font-size:48px;font-weight:900;color:#7c3aed;">${sewun.세운간지}</span>
-                </div>
-            </div>` : ''}
-            <div style="margin-top:30px;padding:16px;background:#f3f4f6;border-radius:12px;font-size:14px;">
-                <strong>길운 표시:</strong> <span style="margin-left:16px;color:#f59e0b;">★ 대길</span> · <span style="color:#22c55e;">◎ 길</span> · <span style="color:#6b7280;">○ 평</span> · <span style="color:#ef4444;">△ 주의</span>
-            </div>
-        </div>
-        ${monthCalendarsHtml}
-    </div>`;
-}
-
-function generatePDFMonthCalendar(year, month, monthData, ilgan) {
-    const mainSipseong = monthData.십성.split('/')[0];
-    const luckInfo = sipseongMeaning[mainSipseong] || { luck: 'normal', keyword: '-' };
-    let borderColor = luckInfo.luck === 'great' ? '#f59e0b' : luckInfo.luck === 'good' ? '#22c55e' : luckInfo.luck === 'caution' ? '#ef4444' : '#9ca3af';
-    let headerBg = luckInfo.luck === 'great' ? '#fffbeb' : luckInfo.luck === 'good' ? '#f0fdf4' : luckInfo.luck === 'caution' ? '#fef2f2' : '#f9fafb';
-
-    const firstDay = new Date(year, month - 1, 1);
-    const lastDay = new Date(year, month, 0);
-    const startDayOfWeek = firstDay.getDay();
-    const totalDays = lastDay.getDate();
-
-    let cells = ['일', '월', '화', '수', '목', '금', '토'].map((d, i) =>
-        `<div style="text-align:center;font-size:11px;font-weight:bold;padding:4px;color:${i === 0 ? '#dc2626' : i === 6 ? '#2563eb' : '#6b7280'};">${d}</div>`
-    ).join('');
-
-    for (let i = 0; i < startDayOfWeek; i++) cells += '<div style="background:#f3f4f6;min-height:45px;border-radius:4px;"></div>';
-
-    for (let day = 1; day <= totalDays; day++) {
-        const dayOfWeek = new Date(year, month - 1, day).getDay();
-        const ganji = SajuCalendar.getDailyGanji(year, month, day);
-        const dayLuck = SajuCalendar.calculateDailyLuck(ilgan, ganji, monthData);
-        let bgColor = dayLuck.luck === 'great' ? '#fef3c7' : dayLuck.luck === 'good' ? '#dcfce7' : dayLuck.luck === 'caution' ? '#fee2e2' : '#f9fafb';
-        let textColor = dayOfWeek === 0 ? '#dc2626' : dayOfWeek === 6 ? '#2563eb' : '#374151';
-        cells += `<div style="background:${bgColor};min-height:45px;border-radius:4px;padding:3px;">
-            <div style="display:flex;justify-content:space-between;"><span style="font-weight:bold;font-size:12px;color:${textColor};">${day}</span><span style="font-size:10px;">${dayLuck.symbol}</span></div>
-            <div style="font-family:'Noto Serif KR',serif;font-size:11px;font-weight:600;color:#374151;">${ganji}</div>
-        </div>`;
-    }
-
-    return `<div style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;border-top:4px solid ${borderColor};">
-        <div style="background:${headerBg};padding:8px 12px;border-bottom:1px solid #e5e7eb;">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-weight:bold;font-size:14px;">${month}월</span>
-                <span style="font-family:'Noto Serif KR',serif;font-size:14px;font-weight:bold;">${monthData.간지}</span>
-                <span style="font-size:11px;color:#7c3aed;">${luckInfo.keyword}</span>
-            </div>
-        </div>
-        <div style="padding:8px;display:grid;grid-template-columns:repeat(7,1fr);gap:3px;">${cells}</div>
-    </div>`;
-}
-
-// 한 페이지 전체 크기 월별 달력 (PDF용)
-function generatePDFMonthCalendarFull(year, month, monthData, ilgan, customerName) {
-    const mainSipseong = monthData.십성.split('/')[0];
-    const luckInfo = sipseongMeaning[mainSipseong] || { luck: 'normal', keyword: '-', advice: '-' };
-
-    let borderColor = luckInfo.luck === 'great' ? '#f59e0b' : luckInfo.luck === 'good' ? '#22c55e' : luckInfo.luck === 'caution' ? '#ef4444' : '#9ca3af';
-    let headerBg = luckInfo.luck === 'great' ? 'linear-gradient(135deg,#fef3c7,#fcd34d)' : luckInfo.luck === 'good' ? 'linear-gradient(135deg,#dcfce7,#86efac)' : luckInfo.luck === 'caution' ? 'linear-gradient(135deg,#fee2e2,#fecaca)' : '#f9fafb';
-
-    const firstDay = new Date(year, month - 1, 1);
-    const lastDay = new Date(year, month, 0);
-    const startDayOfWeek = firstDay.getDay();
-    const totalDays = lastDay.getDate();
-
-    // 요일 헤더
-    let cells = ['일', '월', '화', '수', '목', '금', '토'].map((d, i) =>
-        `<div style="text-align:center;font-size:16px;font-weight:bold;padding:10px;color:${i === 0 ? '#dc2626' : i === 6 ? '#2563eb' : '#374151'};background:#f3f4f6;border-radius:8px;">${d}</div>`
-    ).join('');
-
-    // 빈 셀
-    for (let i = 0; i < startDayOfWeek; i++) {
-        cells += '<div style="background:#f9fafb;min-height:75px;border-radius:8px;"></div>';
-    }
-
-    // 날짜 셀
-    for (let day = 1; day <= totalDays; day++) {
-        const dayOfWeek = new Date(year, month - 1, day).getDay();
-        const ganji = SajuCalendar.getDailyGanji(year, month, day);
-        const dayLuck = SajuCalendar.calculateDailyLuck(ilgan, ganji, monthData);
-        const issues = SajuCalendar.getDailyIssues(ilgan, ganji, monthData);
-
-        let bgColor = dayLuck.luck === 'great' ? '#fef3c7' : dayLuck.luck === 'good' ? '#dcfce7' : dayLuck.luck === 'caution' ? '#fee2e2' : '#ffffff';
-        let textColor = dayOfWeek === 0 ? '#dc2626' : dayOfWeek === 6 ? '#2563eb' : '#1f2937';
-        let borderLeft = dayLuck.luck === 'great' ? '4px solid #f59e0b' : dayLuck.luck === 'good' ? '4px solid #22c55e' : dayLuck.luck === 'caution' ? '4px solid #ef4444' : '4px solid #e5e7eb';
-
-        let issueIcons = issues.slice(0, 3).map(i => i.icon).join(' ');
-
-        cells += `<div style="background:${bgColor};min-height:75px;border-radius:8px;padding:8px;border-left:${borderLeft};box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-weight:bold;font-size:18px;color:${textColor};">${day}</span>
-                <span style="font-size:16px;">${dayLuck.symbol}</span>
-            </div>
-            <div style="font-family:'Noto Serif KR',serif;font-size:18px;font-weight:700;color:#374151;margin-top:4px;">${ganji}</div>
-            ${issueIcons ? `<div style="font-size:12px;margin-top:4px;">${issueIcons}</div>` : ''}
-        </div>`;
-    }
-
-    return `
-        <div style="height:100%;">
-            <!-- 월 헤더 -->
-            <div style="background:${headerBg};border-radius:16px;padding:20px;margin-bottom:20px;border-left:6px solid ${borderColor};">
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <div>
-                        <div style="font-size:14px;color:#6b7280;">${year}년</div>
-                        <div style="font-size:36px;font-weight:800;color:#1f2937;">${month}월</div>
-                    </div>
-                    <div style="text-align:center;">
-                        <div style="font-family:'Noto Serif KR',serif;font-size:48px;font-weight:900;color:#4c1d95;">${monthData.간지}</div>
-                        <div style="font-size:14px;color:#6b7280;">${monthData.십성}</div>
-                    </div>
-                    <div style="text-align:right;">
-                        <div style="font-size:20px;font-weight:bold;color:#7c3aed;">${luckInfo.keyword}</div>
-                        <div style="font-size:14px;color:#6b7280;max-width:200px;">${luckInfo.advice}</div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 달력 그리드 -->
-            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;">
-                ${cells}
-            </div>
-            
-            <!-- 범례 -->
-            <div style="margin-top:16px;padding:12px;background:#f3f4f6;border-radius:8px;display:flex;justify-content:center;gap:24px;font-size:13px;">
-                <span>★ 대길</span>
-                <span>◎ 길</span>
-                <span>○ 평</span>
-                <span>△ 주의</span>
-                <span style="margin-left:20px;">💰재물 📈사업 ✈️이동 🤝귀인 📝문서</span>
-            </div>
-        </div>
-    `;
-}
+// End of file
