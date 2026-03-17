@@ -633,29 +633,77 @@ function getIlganInternal(sajuData) {
 /**
  * 사주 데이터에서 대운(Daeun) 배열 추출
  */
+function findLuckArray(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    if (Array.isArray(obj)) {
+        if (obj.length > 0 && (obj[0].연도 || obj[0].year || obj[0].간지 || obj[0].daeun_number)) return obj;
+        return null;
+    }
+    for (let key in obj) {
+        if (key === 'user_info' || key === 'basic_info' || key === 'birth_info') continue;
+        let res = findLuckArray(obj[key]);
+        if (res) return res;
+    }
+    return null;
+}
+
+function findDirection(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    const keys = ['daeun_direction', 'daewun_direction', 'daewoon_direction', 'direction', '방향'];
+    for (let key of keys) {
+        if (obj[key]) return obj[key];
+    }
+    for (let key in obj) {
+        if (typeof obj[key] === 'object') {
+            let res = findDirection(obj[key]);
+            if (res) return res;
+        }
+    }
+    return null;
+}
+
+function findMonthlyLuck(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    if (obj.월운 && Array.isArray(obj.월운)) return obj.월운;
+    if (obj.monthly_luck && Array.isArray(obj.monthly_luck)) return obj.monthly_luck;
+    for (let key in obj) {
+        if (key === 'user_info' || key === 'basic_info') continue;
+        if (typeof obj[key] === 'object') {
+            let res = findMonthlyLuck(obj[key]);
+            if (res) return res;
+        }
+    }
+    return null;
+}
+
 function getDaeunInternal(sajuData) {
     if (!sajuData) return { data: [] };
     let res = { data: [] };
     
-    // 1. daeun 체크
+    // 1. 직접 경로 체크
     if (sajuData.daeun) {
         if (Array.isArray(sajuData.daeun.data)) res = { ...sajuData.daeun };
         else if (Array.isArray(sajuData.daeun)) res = { data: sajuData.daeun };
         else res = { ...sajuData.daeun };
     } 
     
-    // 2. daewun 체크 (daeun이 없거나 데이터가 비었을 때)
-    if ((!res.data || res.data.length === 0) && (sajuData.daewun || sajuData.daewoon)) {
-        let d = sajuData.daewun || sajuData.daewoon;
-        if (Array.isArray(d)) res.data = d;
-        else if (d.data) res = { ...d };
+    // 2. 가용한 모든 키 체크
+    if ((!res.data || res.data.length === 0)) {
+        let d = sajuData.daewun || sajuData.daewoon || sajuData.daeun_list || sajuData.daewun_list;
+        if (d) {
+            if (Array.isArray(d)) res.data = d;
+            else if (d.data) res = { ...d };
+        }
     }
 
-    // 3. direction 보정 (top-level에 있는 경우)
-    if (!res.direction) {
-        res.direction = sajuData.daeun_direction || sajuData.daewun_direction || 
-                        sajuData.direction || (sajuData.daeun && sajuData.daeun.direction);
+    // 3. 공격적 배열 탐색
+    if (!res.data || res.data.length === 0) {
+        let found = findLuckArray(sajuData);
+        if (found) res.data = found;
     }
+
+    // 4. 방향 추출 (공격적 탐색)
+    res.direction = findDirection(sajuData);
     
     return res;
 }
@@ -664,6 +712,7 @@ function getSewunInternal(sajuData) {
     if (!sajuData) return { data: [] };
     let res = { data: [] };
 
+    // 1. 직접 경로
     if (sajuData.sewun) {
         if (Array.isArray(sajuData.sewun.data)) res = { ...sajuData.sewun };
         else if (Array.isArray(sajuData.sewun)) res = { data: sajuData.sewun };
@@ -674,15 +723,8 @@ function getSewunInternal(sajuData) {
         else res = { ...sajuData.sewoon, data: [sajuData.sewoon] };
     }
 
-    // 연도 검색용 데이터 보강
-    if (!res.data || res.data.length === 0) {
-        if (sajuData.sewun_data) res.data = sajuData.sewun_data;
-    }
-    
-    // 월운 데이터 보강 (top level sewun/sewoon에 월운만 있는 경우)
-    if (!res.월운) {
-        res.월운 = (sajuData.sewun && sajuData.sewun.월운) || (sajuData.sewoon && sajuData.sewoon.월운);
-    }
+    // 2. 공격적 월운(달력) 데이터 탐색
+    res.월운 = findMonthlyLuck(sajuData);
     
     return res;
 }
