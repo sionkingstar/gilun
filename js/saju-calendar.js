@@ -586,17 +586,23 @@ function correctPillars(sajuData, birthInfo) {
  * 양력 월에 해당하는 사주 월운 데이터 추출 (전역 유틸리티)
  */
 function getMonthData(sewun, year, month) {
-    if (!sewun || !sewun.월운) return null;
+    if (!sewun || !sewun.월운 || !Array.isArray(sewun.월운)) return null;
 
     // 2026년 1월 예외 (기축월)
     if (year === 2026 && month === 1) {
         return { 월: '1월', 간지: '己丑', 십성: '비견/비견', 신살: '-', luck: 'normal' };
     }
 
-    // 표준 매핑: 양력 m월 = 사주 (m-1)월
-    const sajuMonthLabel = `${month - 1}월`;
-    if (!Array.isArray(sewun.월운)) return null;
-    return sewun.월운.find(x => x.월 === sajuMonthLabel) || null;
+    // 공격적인 월 검색 (양력 월 vs 사주 월)
+    const possibleLabels = [`${month}월`, `${month - 1}월`, `${month}`];
+    let found = sewun.월운.find(x => possibleLabels.includes(String(x.월 || x.month).trim()));
+    
+    // 못 찾으면 인덱스로 접근 (보통 12개 배열이므로)
+    if (!found && sewun.월운.length >= 12) {
+        found = sewun.월운[month - 1]; // Solar month index
+    }
+
+    return found || null;
 }
 
 /**
@@ -649,9 +655,9 @@ function findLuckArray(obj) {
 
 function findDirection(obj) {
     if (!obj || typeof obj !== 'object') return null;
-    const keys = ['daeun_direction', 'daewun_direction', 'daewoon_direction', 'direction', '방향'];
+    const keys = ['daeun_direction', 'daewun_direction', 'daewoon_direction', 'direction', 'daeun_dir', '방향'];
     for (let key of keys) {
-        if (obj[key]) return obj[key];
+        if (obj[key] && obj[key] !== '?' && obj[key] !== '-') return obj[key];
     }
     for (let key in obj) {
         if (typeof obj[key] === 'object') {

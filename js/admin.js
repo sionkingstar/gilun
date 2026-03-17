@@ -347,8 +347,8 @@ async function downloadPreviewPDF() {
         const daeunData = SajuCalendar.getDaeun(sajuData);
         const sewunData = SajuCalendar.getSewun(sajuData);
         
-        const sewun = (sewunData.data || []).find(s => s.연도 === FIXED_YEAR);
-        const currentDaeun = (daeunData.data || []).find(d => d.연도 <= FIXED_YEAR && d.연도 + 10 > FIXED_YEAR);
+        const sewun = (sewunData.data || []).find(s => Number(s.연도) === Number(FIXED_YEAR));
+        const currentDaeun = (daeunData.data || []).find(d => Number(d.연도) <= Number(FIXED_YEAR) && Number(d.연도) + 10 > Number(FIXED_YEAR));
         const ilgan = SajuCalendar.getIlgan(sajuData);
 
         // jsPDF 초기화 (가로 A4)
@@ -387,6 +387,8 @@ async function downloadPreviewPDF() {
         });
         let imgData = canvas.toDataURL('image/jpeg', 0.9); // JPEG 압축
         pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight); // PDF 페이지에 이미지 추가
+
+
 
         const sewunOrData = (sewun && sewun.월운) ? sewun : sewunData;
         const monthlyLuckArray = sewunOrData.월운;
@@ -609,8 +611,8 @@ function generateFullCalendarPreview(customer, sajuData, year) {
     const daeunData = SajuCalendar.getDaeun(sajuData);
     const sewunData = SajuCalendar.getSewun(sajuData);
     
-    const sewun = (sewunData.data || []).find(s => s.연도 === year);
-    const currentDaeun = (daeunData.data || []).find(d => d.연도 <= year && d.연도 + 10 > year);
+    const sewun = (sewunData.data || []).find(s => Number(s.연도) === Number(year));
+    const currentDaeun = (daeunData.data || []).find(d => Number(d.연도) <= Number(year) && Number(d.연도) + 10 > Number(year));
     const ilgan = SajuCalendar.getIlgan(sajuData);
 
     const pillarsHtml = pillars.map(p => {
